@@ -25,6 +25,7 @@ services:
     environment:
       API_PROXY_TARGET: http://backend:8000
       VITE_API_MODE: live
+      VITE_DEFAULT_CITY_ID: fixture
     command: npm run dev -- --host 0.0.0.0 --port 5173
     depends_on:
       - backend

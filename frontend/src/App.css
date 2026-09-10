@@ -1,43 +1,181 @@
-:root {
-  font-family: system-ui, sans-serif;
-  color: #101418;
-  background: #f4f1ea;
+.planner {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #f4f7fb;
+  color: #111827;
 }
 
-body {
+.planner-header {
+  padding: 1rem 1.25rem 0.5rem;
+}
+
+.planner-header h1 {
   margin: 0;
+  font-size: 1.5rem;
 }
 
-.shell {
-  max-width: 40rem;
-  margin: 0 auto;
-  padding: 2.5rem 1.25rem;
+.planner-header p {
+  margin: 0.25rem 0 0;
+  color: #4b5563;
 }
 
-h1 {
-  margin: 0 0 0.5rem;
-  font-size: 2rem;
-}
-
-.lede {
-  margin: 0 0 1.5rem;
-  color: #4a5560;
-}
-
-dl {
+.planner-body {
+  flex: 1;
   display: grid;
-  grid-template-columns: 7rem 1fr;
-  gap: 0.5rem 1rem;
+  grid-template-columns: minmax(0, 1fr) 22rem;
+  gap: 1rem;
+  padding: 0 1rem 1rem;
 }
 
-dt {
-  font-weight: 650;
+.map-panel {
+  position: relative;
+  min-height: 70vh;
+  border-radius: 1rem;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
 }
 
-dd {
+.map-container {
+  width: 100%;
+  height: 100%;
+  min-height: 70vh;
+}
+
+.details-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: 1rem;
+  padding: 1rem;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  overflow: auto;
+}
+
+.legend {
+  position: absolute;
+  left: 1rem;
+  bottom: 1rem;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+}
+
+.legend-scale {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.controls,
+.summary,
+.charts,
+.road-inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.controls label,
+.mode-toggle,
+.summary div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.mode-toggle {
+  flex-direction: row;
+}
+
+.mode-toggle button,
+.controls button {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.75rem 1rem;
+  background: #111827;
+  color: white;
+  font-weight: 600;
+}
+
+.mode-toggle button {
+  flex: 1;
+  background: #e5e7eb;
+  color: #111827;
+}
+
+.mode-toggle button.active {
+  background: #111827;
+  color: white;
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.summary dt {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+.summary dd {
   margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.hint,
+.chart-summary,
+.error {
+  margin: 0;
+  color: #4b5563;
 }
 
 .error {
-  color: #9b1c1c;
+  color: #b91c1c;
+}
+
+.road-inspector {
+  position: relative;
+  padding: 0.75rem;
+  border-radius: 0.75rem;
+  background: #f9fafb;
+}
+
+.close-button {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  border: 0;
+  background: transparent;
+  font-size: 1.25rem;
+}
+
+.waypoint-marker {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  border: 2px solid white;
+  background: #2563eb;
+  color: white;
+  font-weight: 700;
+}
+
+@media (max-width: 900px) {
+  .planner-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(55vh, 1fr) auto;
+  }
+
+  .details-panel {
+    position: sticky;
+    bottom: 0;
+    max-height: 45vh;
+  }
 }

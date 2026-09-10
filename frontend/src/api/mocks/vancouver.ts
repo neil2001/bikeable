@@ -5,6 +5,18 @@ export const mockHealth = { status: "ok" };
 export const mockCities: CityListResponse = {
   cities: [
     {
+      cityId: "fixture",
+      name: "Fixture Network",
+      bbox: {
+        minLon: -123.13,
+        minLat: 49.278,
+        maxLon: -123.09,
+        maxLat: 49.283,
+      },
+      graphVersion: "1",
+      scoreVersion: "v1",
+    },
+    {
       cityId: "vancouver",
       name: "Vancouver, BC",
       bbox: {
