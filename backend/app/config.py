@@ -11,6 +11,19 @@ class Settings(BaseSettings):
     app_name: str = "Bikeable Route Finder"
     cors_origins: str = "http://localhost:5173"
     scoring_config_path: Path = REPO_ROOT / "config" / "scoring" / "v1.yaml"
+    data_root: Path = REPO_ROOT / "data"
+
+    @property
+    def processed_data_dir(self) -> Path:
+        return self.data_root / "processed"
+
+    @property
+    def raw_data_dir(self) -> Path:
+        return self.data_root / "raw"
+
+    @property
+    def cache_data_dir(self) -> Path:
+        return self.data_root / "cache"
 
     @property
     def cors_origin_list(self) -> list[str]:

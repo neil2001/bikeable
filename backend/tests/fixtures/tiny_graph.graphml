@@ -1,0 +1,53 @@
+<?xml version='1.0' encoding='utf-8'?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+  <key id="d6" for="edge" attr.name="length_m" attr.type="string" />
+  <key id="d5" for="edge" attr.name="highway" attr.type="string" />
+  <key id="d4" for="node" attr.name="y" attr.type="string" />
+  <key id="d3" for="node" attr.name="x" attr.type="string" />
+  <key id="d2" for="node" attr.name="lon" attr.type="string" />
+  <key id="d1" for="node" attr.name="lat" attr.type="string" />
+  <key id="d0" for="graph" attr.name="crs" attr.type="string" />
+  <graph edgedefault="directed">
+    <node id="1">
+      <data key="d1">49.28</data>
+      <data key="d2">-123.12</data>
+      <data key="d3">0.0</data>
+      <data key="d4">0.0</data>
+    </node>
+    <node id="2">
+      <data key="d1">49.281</data>
+      <data key="d2">-123.11</data>
+      <data key="d3">1000.0</data>
+      <data key="d4">0.0</data>
+    </node>
+    <node id="3">
+      <data key="d1">49.282</data>
+      <data key="d2">-123.1</data>
+      <data key="d3">2000.0</data>
+      <data key="d4">100.0</data>
+    </node>
+    <node id="4">
+      <data key="d1">49.279</data>
+      <data key="d2">-123.105</data>
+      <data key="d3">1500.0</data>
+      <data key="d4">-200.0</data>
+    </node>
+    <edge source="1" target="2" id="0">
+      <data key="d5">residential</data>
+      <data key="d6">1000.0</data>
+    </edge>
+    <edge source="2" target="3" id="0">
+      <data key="d5">residential</data>
+      <data key="d6">1000.0</data>
+    </edge>
+    <edge source="3" target="4" id="0">
+      <data key="d5">residential</data>
+      <data key="d6">1414.0</data>
+    </edge>
+    <edge source="4" target="1" id="0">
+      <data key="d5">residential</data>
+      <data key="d6">1500.0</data>
+    </edge>
+    <data key="d0">EPSG:32610</data>
+  </graph>
+</graphml>
