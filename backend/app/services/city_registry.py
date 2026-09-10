@@ -1,0 +1,57 @@
+from app.config import settings
+from app.graph.registry import get_city_definition
+from app.models.responses import BBox, CitySummary
+from app.services.city_graph import city_graph_is_available
+
+FIXTURE = CitySummary(
+    city_id="fixture",
+    name="Fixture Network",
+    bbox=BBox(
+        min_lon=-123.13,
+        min_lat=49.278,
+        max_lon=-123.09,
+        max_lat=49.283,
+    ),
+    graph_version="1",
+    score_version="v1",
+)
+
+VANCOUVER = CitySummary(
+    city_id="vancouver",
+    name="Vancouver, BC",
+    bbox=BBox(
+        min_lon=-123.27,
+        min_lat=49.198,
+        max_lon=-123.023,
+        max_lat=49.317,
+    ),
+    graph_version="1" if city_graph_is_available("vancouver") else "unbuilt",
+    score_version="v1",
+)
+
+CITY_SUMMARIES = {
+    FIXTURE.city_id: FIXTURE,
+    VANCOUVER.city_id: VANCOUVER,
+}
+
+
+def list_city_summaries() -> list[CitySummary]:
+    return list(CITY_SUMMARIES.values())
+
+
+def get_city_summary(city_id: str) -> CitySummary:
+    city = CITY_SUMMARIES.get(city_id)
+    if city is None:
+        msg = f"Unknown city '{city_id}'."
+        raise KeyError(msg)
+    return city
+
+
+def resolve_city_id(city_id: str | None = None) -> str:
+    requested = city_id or settings.default_city_id
+    if city_graph_is_available(requested):
+        get_city_definition(requested)
+        return requested
+    if city_graph_is_available("fixture"):
+        return "fixture"
+    return requested

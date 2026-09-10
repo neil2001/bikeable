@@ -67,6 +67,27 @@ export type SegmentRouteResponse = {
   elevationGainM: number;
 };
 
+export type SegmentRouteRequest = {
+  start: Coordinate;
+  end: Coordinate;
+  profile: CyclingProfile;
+  preferences: RoutePreferences;
+};
+
+export type ManualRouteRequest = {
+  waypoints: Coordinate[];
+  profile: CyclingProfile;
+  preferences: RoutePreferences;
+};
+
+export type LoopRouteRequest = {
+  start: Coordinate;
+  targetDistanceM: number;
+  profile: CyclingProfile;
+  preferences: RoutePreferences;
+  constraints?: RouteConstraints;
+};
+
 export type HealthResponse = {
   status: string;
 };
@@ -103,6 +124,32 @@ export type BikeabilityNetworkResponse = {
   cityId: string;
   scoreVersion: string;
   features: BikeabilityFeature[];
+};
+
+export type RoadInspectionResponse = {
+  roadId: string;
+  geometry: GeoJsonLineString;
+  features: {
+    highway?: string | null;
+    speedKph?: number | null;
+    lanes?: number | null;
+    surface?: string | null;
+    protectedBikeInfrastructure: boolean;
+    bikeLane: boolean;
+    grade?: number | null;
+  };
+  bikeability: {
+    score: number;
+    components: {
+      infrastructure: number;
+      roadComfort: number;
+      speed: number;
+      traffic: number;
+      surface: number;
+      grade: number;
+    };
+  };
+  profile: CyclingProfile;
 };
 
 export type ApiErrorCode =

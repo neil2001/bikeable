@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173"
     scoring_config_path: Path = REPO_ROOT / "config" / "scoring" / "v1.yaml"
     data_root: Path = REPO_ROOT / "data"
+    default_city_id: str = "fixture"
 
     @property
     def processed_data_dir(self) -> Path:
