@@ -1,0 +1,29 @@
+version: 1
+
+profiles:
+  road:
+    weights:
+      infrastructure: 0.25
+      road_comfort: 0.15
+      speed: 0.10
+      traffic: 0.15
+      surface: 0.20
+      grade: 0.15
+
+  commuter:
+    weights:
+      infrastructure: 0.35
+      road_comfort: 0.20
+      speed: 0.15
+      traffic: 0.20
+      surface: 0.05
+      grade: 0.05
+
+  leisure:
+    weights:
+      infrastructure: 0.30
+      road_comfort: 0.25
+      speed: 0.15
+      traffic: 0.15
+      surface: 0.05
+      grade: 0.10

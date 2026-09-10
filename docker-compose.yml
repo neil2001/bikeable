@@ -1,0 +1,28 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./config:/config
+    environment:
+      SCORING_CONFIG_PATH: /config/scoring/v1.yaml
+      CORS_ORIGINS: http://localhost:5173
+    command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      API_PROXY_TARGET: http://backend:8000
+      VITE_API_MODE: live
+    command: npm run dev -- --host 0.0.0.0 --port 5173
+    depends_on:
+      - backend
