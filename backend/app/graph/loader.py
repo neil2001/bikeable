@@ -1,6 +1,7 @@
 import networkx as nx
 
 from app.config import settings
+from app.features.apply import apply_features_to_graph
 from app.graph.fixture import load_fixture_graph
 from app.graph.ingest import download_city_graph
 from app.graph.registry import get_city_definition
@@ -23,17 +24,17 @@ def load_city_graph(
     """Load a processed city graph from cache, building it when necessary."""
     city = get_city_definition(city_id)
     if city.is_fixture:
-        return load_fixture_graph()
+        return apply_features_to_graph(load_fixture_graph())
 
     paths = processed_graph_paths(settings.processed_data_dir, city_id)
     if not force_rebuild and paths.graphml.exists():
-        return load_processed_graph(paths)
+        return apply_features_to_graph(load_processed_graph(paths))
 
     if city.osm_place is None:
         msg = f"City '{city_id}' does not define an OSM place query."
         raise GraphPipelineError(msg)
 
-    graph = download_city_graph(city.osm_place)
+    graph = apply_features_to_graph(download_city_graph(city.osm_place))
     save_processed_graph(
         graph,
         processed_root=settings.processed_data_dir,
