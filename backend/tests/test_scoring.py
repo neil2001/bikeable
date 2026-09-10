@@ -73,7 +73,7 @@ def test_create_bike_graph_removes_non_traversable_edges() -> None:
 
     apply_features_to_graph(graph)
     bike_graph = create_bike_graph(graph)
-    assert bike_graph.number_of_edges() == 4
+    assert bike_graph.number_of_edges() == graph.number_of_edges() - 1
     assert all(
         edge_data.get("highway") != "motorway"
         for *_rest, edge_data in bike_graph.edges(keys=True, data=True)

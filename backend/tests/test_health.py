@@ -10,12 +10,13 @@ def test_health_ok() -> None:
     assert response.json() == {"status": "ok"}
 
 
-def test_list_cities_includes_vancouver() -> None:
+def test_list_cities_includes_fixture_and_vancouver() -> None:
     response = client.get("/api/v1/cities")
     assert response.status_code == 200
     payload = response.json()
-    assert payload["cities"][0]["cityId"] == "vancouver"
-    assert payload["cities"][0]["name"] == "Vancouver, BC"
+    city_ids = {city["cityId"] for city in payload["cities"]}
+    assert "fixture" in city_ids
+    assert "vancouver" in city_ids
 
 
 def test_unknown_city_returns_stable_error_code() -> None:

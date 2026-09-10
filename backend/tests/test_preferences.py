@@ -34,7 +34,10 @@ def test_segment_endpoint_validates_preference_weights() -> None:
     assert response.json()["error"]["code"] == "INVALID_REQUEST"
 
 
-def test_segment_endpoint_accepts_valid_weights_and_is_stubbed() -> None:
-    response = client.post("/api/v1/routes/segment", json=VALID_SEGMENT)
-    assert response.status_code == 501
-    assert response.json()["error"]["code"] == "ROUTE_GENERATION_FAILED"
+def test_segment_endpoint_accepts_valid_weights_and_routes() -> None:
+    response = client.post(
+        "/api/v1/routes/segment?cityId=fixture",
+        json=VALID_SEGMENT,
+    )
+    assert response.status_code == 200
+    assert response.json()["distanceM"] > 0

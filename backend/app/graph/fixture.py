@@ -30,13 +30,19 @@ def build_tiny_graph() -> nx.MultiDiGraph:
     for node_id, attrs in nodes.items():
         graph.add_node(node_id, **attrs)
 
-    edges = [
+    edge_specs = [
         (1, 2, {"highway": "residential", "length_m": 1000.0}),
+        (2, 1, {"highway": "residential", "length_m": 1000.0}),
         (2, 3, {"highway": "residential", "length_m": 1000.0}),
+        (3, 2, {"highway": "residential", "length_m": 1000.0}),
         (3, 4, {"highway": "residential", "length_m": 1414.0}),
+        (4, 3, {"highway": "residential", "length_m": 1414.0}),
         (4, 1, {"highway": "residential", "length_m": 1500.0}),
+        (1, 4, {"highway": "residential", "length_m": 1500.0}),
+        (1, 3, {"highway": "primary", "maxspeed": "45 mph", "length_m": 1700.0}),
+        (3, 1, {"highway": "primary", "maxspeed": "45 mph", "length_m": 1700.0}),
     ]
-    for source, target, attrs in edges:
+    for source, target, attrs in edge_specs:
         graph.add_edge(source, target, **attrs)
 
     return normalize_graph(graph)

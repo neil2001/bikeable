@@ -108,4 +108,4 @@ def test_fixture_graph_load_includes_features() -> None:
     graph = load_city_graph("fixture")
     for _source, _target, _key, edge_data in graph.edges(keys=True, data=True):
         assert edge_data[feature_key("traversable")] is True
-        assert edge_data[feature_key("highway_class")] == "residential"
+        assert edge_data[feature_key("highway_class")] in {"residential", "primary"}
