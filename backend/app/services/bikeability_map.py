@@ -1,4 +1,5 @@
 import networkx as nx
+from app.graph.geometry import edge_to_wgs84_coordinates
 from app.models.responses import (
     BikeabilityFeature,
     BikeabilityFeatureProperties,
@@ -15,9 +16,11 @@ def graph_to_bikeability_response(
 ) -> BikeabilityNetworkResponse:
     features: list[BikeabilityFeature] = []
     for source, target, key, edge_data in graph.edges(keys=True, data=True):
-        source_node = graph.nodes[source]
-        target_node = graph.nodes[target]
         bikeability = float(edge_data.get("bikeability", 0.0))
+        coordinates = edge_to_wgs84_coordinates(graph, source, target, edge_data)
+        rounded_coordinates = [
+            [round(point[0], 6), round(point[1], 6)] for point in coordinates
+        ]
         features.append(
             BikeabilityFeature(
                 properties=BikeabilityFeatureProperties(
@@ -26,10 +29,7 @@ def graph_to_bikeability_response(
                 ),
                 geometry={
                     "type": "LineString",
-                    "coordinates": [
-                        [float(source_node["lon"]), float(source_node["lat"])],
-                        [float(target_node["lon"]), float(target_node["lat"])],
-                    ],
+                    "coordinates": rounded_coordinates,
                 },
             ),
         )

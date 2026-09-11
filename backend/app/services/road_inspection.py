@@ -1,5 +1,6 @@
 import networkx as nx
 from app.features.apply import read_features_from_edge
+from app.graph.geometry import edge_to_wgs84_coordinates
 from app.models.common import CyclingProfile
 from app.models.responses import (
     BikeabilityComponents,
@@ -8,6 +9,8 @@ from app.models.responses import (
     RoadInspectionResponse,
 )
 from app.routing.ids import make_road_id, parse_road_id
+from app.scoring.config import get_profile, load_scoring_config
+from app.scoring.score import score_road_detailed
 
 
 def inspect_road(
@@ -22,36 +25,48 @@ def inspect_road(
         raise KeyError(msg)
 
     features = read_features_from_edge(edge_data)
-    source_node = graph.nodes[source]
-    target_node = graph.nodes[target]
+    scoring = load_scoring_config()
+    breakdown = score_road_detailed(
+        features,
+        get_profile(profile.value, scoring),
+        config=scoring,
+    )
+    coordinates = edge_to_wgs84_coordinates(graph, source, target, edge_data)
+    stored_reasons = edge_data.get("score_reasons")
+    reasons = (
+        [str(item) for item in stored_reasons]
+        if isinstance(stored_reasons, list)
+        else list(breakdown.reasons)
+    )
     return RoadInspectionResponse(
         road_id=make_road_id(source, target, key),
         geometry={
             "type": "LineString",
-            "coordinates": [
-                [float(source_node["lon"]), float(source_node["lat"])],
-                [float(target_node["lon"]), float(target_node["lat"])],
-            ],
+            "coordinates": coordinates,
         },
         features=RoadFeatureDiagnostics(
             highway=features.highway_class,
             speed_kph=features.speed_kph,
-            lanes=edge_data.get("feat_lane_count"),
+            lanes=features.lane_count,
             surface=edge_data.get("surface"),
             protected_bike_infrastructure=features.protected_infrastructure,
             bike_lane=features.dedicated_bike_lane,
             grade=features.grade,
         ),
         bikeability=RoadBikeabilityDetail(
-            score=float(edge_data.get("bikeability", 0.0)),
+            score=float(edge_data.get("bikeability", breakdown.score)),
             components=BikeabilityComponents(
                 infrastructure=features.infrastructure_quality,
                 road_comfort=features.road_comfort,
+                environment=features.road_comfort,
                 speed=features.speed_comfort,
                 traffic=features.traffic_comfort,
                 surface=features.surface_quality,
                 grade=features.grade_comfort,
+                context=breakdown.context_bonus,
+                calm_geometry=features.calm_geometry,
             ),
+            reasons=reasons,
         ),
         profile=profile,
     )

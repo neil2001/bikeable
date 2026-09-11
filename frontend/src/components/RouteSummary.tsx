@@ -7,10 +7,10 @@ type Props = {
 
 export function RouteSummary({ route, loading }: Props) {
   if (loading) {
-    return <p className="summary">Routing…</p>;
+    return <p className="summary placeholder">Routing…</p>;
   }
   if (!route) {
-    return <p className="summary">No route yet.</p>;
+    return <p className="summary placeholder">No route yet.</p>;
   }
 
   return (

@@ -14,19 +14,19 @@ export const mockCities: CityListResponse = {
         maxLat: 49.283,
       },
       graphVersion: "1",
-      scoreVersion: "v1",
+      scoreVersion: "2",
     },
     {
       cityId: "vancouver",
-      name: "Vancouver, BC",
+      name: "Vancouver metro",
       bbox: {
-        minLon: -123.27,
+        minLon: -123.285,
         minLat: 49.198,
-        maxLon: -123.023,
-        maxLat: 49.317,
+        maxLon: -122.95,
+        maxLat: 49.375,
       },
       graphVersion: "unbuilt",
-      scoreVersion: "v1",
+      scoreVersion: "2",
     },
   ],
 };
@@ -67,7 +67,7 @@ export const mockLoopResponse: RouteResponse = {
 
 export const mockBikeabilityNetwork: BikeabilityNetworkResponse = {
   cityId: "vancouver",
-  scoreVersion: "v1",
+  scoreVersion: "2",
   features: [
     {
       type: "Feature",

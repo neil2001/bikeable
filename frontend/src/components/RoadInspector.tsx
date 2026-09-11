@@ -1,3 +1,4 @@
+import { X } from "lucide-react";
 import type { RoadInspectionResponse } from "../types/api";
 
 type Props = {
@@ -13,7 +14,7 @@ export function RoadInspector({ inspection, onClose }: Props) {
   return (
     <section className="road-inspector" aria-live="polite">
       <button type="button" className="close-button" onClick={onClose} aria-label="Close">
-        ×
+        <X size={16} strokeWidth={1.75} />
       </button>
       <h2>Road</h2>
       <p className="score-line">
@@ -33,6 +34,13 @@ export function RoadInspector({ inspection, onClose }: Props) {
         <dt>Protected infra</dt>
         <dd>{inspection.features.protectedBikeInfrastructure ? "yes" : "no"}</dd>
       </dl>
+      {(inspection.bikeability.reasons ?? []).length > 0 && (
+        <ul className="inspection-reasons">
+          {(inspection.bikeability.reasons ?? []).map((reason) => (
+            <li key={reason}>{reason}</li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }

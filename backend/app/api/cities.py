@@ -1,4 +1,5 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
 
 from app.api.errors import ApiError
 from app.models.common import ApiErrorCode, CyclingProfile
@@ -7,8 +8,11 @@ from app.models.responses import (
     CityListResponse,
     CitySummary,
 )
-from app.services.bikeability_map import graph_to_bikeability_response
-from app.services.city_graph import CityGraphUnavailableError, get_scored_graph
+from app.services.city_graph import (
+    CityGraphUnavailableError,
+    bikeability_etag,
+    get_bikeability_overlay,
+)
 from app.services.city_registry import get_city_summary, list_city_summaries
 
 router = APIRouter()
@@ -37,9 +41,10 @@ def get_city(cityId: str) -> CitySummary:
     response_model=BikeabilityNetworkResponse,
 )
 def get_city_bikeability(
+    request: Request,
     cityId: str,
     profile: CyclingProfile = CyclingProfile.ROAD,
-) -> BikeabilityNetworkResponse:
+) -> BikeabilityNetworkResponse | JSONResponse:
     try:
         get_city_summary(cityId)
     except KeyError:
@@ -51,7 +56,7 @@ def get_city_bikeability(
         ) from None
 
     try:
-        graph, _bike_graph = get_scored_graph(cityId, profile.value)
+        overlay = get_bikeability_overlay(cityId, profile.value)
     except CityGraphUnavailableError as exc:
         raise ApiError(
             code=ApiErrorCode.GRAPH_UNAVAILABLE,
@@ -60,8 +65,20 @@ def get_city_bikeability(
             details={"cityId": cityId, "profile": profile.value},
         ) from exc
 
-    return graph_to_bikeability_response(
-        graph,
-        city_id=cityId,
-        score_version=str(graph.graph.get("score_version", "v1")),
+    etag = bikeability_etag(cityId, profile.value)
+    if request.headers.get("if-none-match") == etag:
+        return JSONResponse(
+            status_code=304,
+            headers={
+                "Cache-Control": "public, max-age=86400",
+                "ETag": etag,
+            },
+        )
+
+    return JSONResponse(
+        content=overlay.model_dump(by_alias=True),
+        headers={
+            "Cache-Control": "public, max-age=86400",
+            "ETag": etag,
+        },
     )

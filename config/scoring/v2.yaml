@@ -1,0 +1,98 @@
+# Bikeability scoring v2.
+#
+# Calibration (M6):
+# Fixture OSM-like dicts (CI, road profile):
+#   seawall_cycleway     10.0   band 9–10
+#   stanley_park_drive    8.8   band 8–9
+#   union_separate        8.9   band 8–9
+#   balaclava_lcn         8.0   band 7–8
+#   hornby_separate       7.0   band 7–8.5
+#   broadway_primary      3.2   band 3–5
+#   knight_primary        3.1   band 2–4
+#   georgia_trunk         2.8   band 2–4
+#   residential 30 km/h   7.5   ≥ 6.5
+#
+# Live Vancouver metro graph after drive∪bike ingest (road profile, mean
+# by OSM name; 33397 nodes / 98980 edges, 3958 cycleway edges):
+#   Stanley Park Seawall  10.0
+#   Stanley Park Drive     8.5
+#   Union Street           8.0
+#   Hornby Street          8.7  (some downtown edges inherit nearby park overlay)
+#   Balaclava Street       7.6
+#   West Broadway          3.7
+#   West Georgia Street    3.3
+# Order holds: seawall ≥ park drive ≫ Broadway / Georgia.
+#
+# YAML knobs: park context 0.7, separate infra 1.6, designated/lcn 0.35,
+# calm_combo 0.25, park_calm 0.35, fast_wide_exposed −0.4, protection_on_busy 0.60.
+#
+# Infrastructure is a bonus (none = +0), not a 25% floor on the score.
+
+version: 2
+
+routing:
+  gamma: 1.6
+  avoid_score: 3.0
+  avoid_factor: 1.3
+
+infra_bonus:
+  exclusive_cycleway: 2.4
+  separate_or_track: 1.6
+  designated_or_lcn: 0.35
+  lane: 0.9
+  shared: 0.3
+  sharrow: 0.2
+  none: 0.0
+
+context_bonus:
+  park: 0.7
+  greenway: 0.7
+  lcn: 0.2
+  none: 0.0
+
+interactions:
+  - id: calm_combo
+    delta: 0.25
+  - id: park_calm
+    delta: 0.35
+  - id: fast_wide_exposed
+    delta: -0.4
+  - id: protection_on_busy
+    delta: 0.60
+
+profiles:
+  road:
+    infra_scale: 0.75
+    context_scale: 1.0
+    interaction_scale: 1.0
+    weights:
+      traffic: 0.30
+      speed: 0.22
+      road_environment: 0.18
+      surface: 0.18
+      calm_geometry: 0.12
+      grade: 0.00
+
+  commuter:
+    infra_scale: 1.25
+    context_scale: 0.6
+    interaction_scale: 1.0
+    weights:
+      traffic: 0.34
+      speed: 0.18
+      road_environment: 0.14
+      surface: 0.10
+      calm_geometry: 0.24
+      grade: 0.00
+
+  leisure:
+    infra_scale: 1.0
+    context_scale: 1.35
+    interaction_scale: 1.0
+    weights:
+      traffic: 0.28
+      speed: 0.20
+      road_environment: 0.16
+      surface: 0.16
+      calm_geometry: 0.20
+      grade: 0.00

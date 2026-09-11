@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 import networkx as nx
 from app.features.apply import read_features_from_edge
+from app.graph.geometry import edge_to_wgs84_coordinates
 from app.models.common import GeoJSONLineString
 from app.models.responses import RouteProfileSample
 
@@ -21,10 +22,22 @@ class RouteMetrics:
 
 
 def path_to_coordinates(graph: nx.MultiDiGraph, path: list[int]) -> list[list[float]]:
+    if not path:
+        return []
+    if len(path) == 1:
+        node = graph.nodes[path[0]]
+        return [[float(node["lon"]), float(node["lat"])]]
+
     coordinates: list[list[float]] = []
-    for node_id in path:
-        node = graph.nodes[node_id]
-        coordinates.append([float(node["lon"]), float(node["lat"])])
+    for index in range(len(path) - 1):
+        source = path[index]
+        target = path[index + 1]
+        edge_data = _select_edge_data(graph, source, target)
+        segment_coords = edge_to_wgs84_coordinates(graph, source, target, edge_data)
+        if index == 0:
+            coordinates.extend(segment_coords)
+        else:
+            coordinates.extend(segment_coords[1:])
     return coordinates
 
 

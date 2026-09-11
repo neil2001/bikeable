@@ -37,6 +37,7 @@ export function usePlanner() {
   const [heatmapFeatures, setHeatmapFeatures] = useState<
     BikeabilityNetworkResponse["features"]
   >([]);
+  const [heatmapLoading, setHeatmapLoading] = useState(true);
   const [roadInspection, setRoadInspection] = useState<RoadInspectionResponse | null>(null);
   const [cursorDistanceM, setCursorDistanceM] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -58,6 +59,7 @@ export function usePlanner() {
   useEffect(() => {
     let cancelled = false;
     async function loadHeatmap() {
+      setHeatmapLoading(true);
       try {
         const network = await getBikeabilityNetwork(cityId, profile);
         if (!cancelled) {
@@ -66,6 +68,10 @@ export function usePlanner() {
       } catch (cause) {
         if (!cancelled && cause instanceof ApiClientError) {
           setError(cause.message);
+        }
+      } finally {
+        if (!cancelled) {
+          setHeatmapLoading(false);
         }
       }
     }
@@ -247,9 +253,11 @@ export function usePlanner() {
     setTargetDistanceMi,
     waypoints,
     start,
+    setStart,
     route,
     segmentGeometries,
     heatmapFeatures,
+    heatmapLoading,
     roadInspection,
     setRoadInspection,
     cursorDistanceM,
@@ -263,5 +271,6 @@ export function usePlanner() {
     inspectRoadAt,
     useCurrentLocation,
     exportRoute,
+    selectedCity: cities.find((c) => c.cityId === cityId) ?? null,
   };
 }

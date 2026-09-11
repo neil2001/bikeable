@@ -102,15 +102,19 @@ class RoadFeatureDiagnostics(ApiModel):
 class BikeabilityComponents(ApiModel):
     infrastructure: float
     road_comfort: float
-    speed: float
+    environment: float
+    speed: float | None = None
     traffic: float
-    surface: float
-    grade: float
+    surface: float | None = None
+    grade: float | None = None
+    context: float = 0.0
+    calm_geometry: float = 0.0
 
 
 class RoadBikeabilityDetail(ApiModel):
     score: float
     components: BikeabilityComponents
+    reasons: list[str] = []
 
 
 class RoadInspectionResponse(ApiModel):

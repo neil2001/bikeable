@@ -1,6 +1,6 @@
 import uuid
 
-from app.elevation.null_provider import sample_elevations
+from app.elevation.provider import sample_path_elevations
 from app.models.requests import (
     LoopRouteRequest,
     ManualRouteRequest,
@@ -13,6 +13,11 @@ from app.models.responses import (
     SegmentRouteResponse,
 )
 from app.optimization.loop import generate_loop
+from app.routing.metrics import (
+    RouteMetrics,
+    build_line_string,
+    compute_route_metrics,
+)
 from app.routing.point_to_point import RoutingError, route_point_to_point
 from app.services.city_graph import get_scored_graph
 from app.services.route_store import save_route
@@ -22,12 +27,13 @@ def route_segment(
     request: SegmentRouteRequest, city_id: str = "fixture"
 ) -> SegmentRouteResponse:
     _graph, bike_graph = get_scored_graph(city_id, request.profile.value)
-    _path, metrics, geometry = route_point_to_point(
+    path, _metrics, geometry = route_point_to_point(
         bike_graph,
         request.start,
         request.end,
         request.preferences,
     )
+    metrics = _metrics_with_elevation(bike_graph, path)
     return SegmentRouteResponse(
         geometry=geometry,
         distance_m=metrics.distance_m,
@@ -53,10 +59,7 @@ def route_manual(
         else:
             full_path.extend(segment_path)
 
-    elevations = sample_elevations(len(full_path))
-    from app.routing.metrics import build_line_string, compute_route_metrics
-
-    metrics = compute_route_metrics(bike_graph, full_path, elevations=elevations)
+    metrics = _metrics_with_elevation(bike_graph, full_path)
     response = _metrics_to_route_response(
         route_id=f"rt_{uuid.uuid4().hex[:12]}",
         geometry=build_line_string(bike_graph, full_path),
@@ -75,10 +78,11 @@ def route_loop(request: LoopRouteRequest, city_id: str = "fixture") -> RouteResp
         request.preferences,
         request.constraints,
     )
+    metrics = _metrics_with_elevation(bike_graph, result.path)
     response = _metrics_to_route_response(
         route_id=f"rt_{uuid.uuid4().hex[:12]}",
         geometry=result.geometry,
-        metrics=result.metrics,
+        metrics=metrics,
         optimization=OptimizationMetadata(
             algorithm_version="loop-heuristic-v1",
             candidates_evaluated=result.candidates_evaluated,
@@ -87,6 +91,11 @@ def route_loop(request: LoopRouteRequest, city_id: str = "fixture") -> RouteResp
     )
     save_route(response)
     return response
+
+
+def _metrics_with_elevation(graph, path: list[int]) -> RouteMetrics:
+    elevations = sample_path_elevations(graph, path)
+    return compute_route_metrics(graph, path, elevations=elevations)
 
 
 def _metrics_to_route_response(

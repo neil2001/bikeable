@@ -1,7 +1,10 @@
 from app.config import settings
 from app.graph.registry import get_city_definition
 from app.models.responses import BBox, CitySummary
+from app.scoring.config import cached_scoring_config
 from app.services.city_graph import city_graph_is_available
+
+SCORE_VERSION = str(cached_scoring_config().version)
 
 FIXTURE = CitySummary(
     city_id="fixture",
@@ -13,20 +16,20 @@ FIXTURE = CitySummary(
         max_lat=49.283,
     ),
     graph_version="1",
-    score_version="v1",
+    score_version=SCORE_VERSION,
 )
 
 VANCOUVER = CitySummary(
     city_id="vancouver",
-    name="Vancouver, BC",
+    name="Vancouver metro",
     bbox=BBox(
-        min_lon=-123.27,
+        min_lon=-123.285,
         min_lat=49.198,
-        max_lon=-123.023,
-        max_lat=49.317,
+        max_lon=-122.95,
+        max_lat=49.375,
     ),
     graph_version="1" if city_graph_is_available("vancouver") else "unbuilt",
-    score_version="v1",
+    score_version=SCORE_VERSION,
 )
 
 CITY_SUMMARIES = {

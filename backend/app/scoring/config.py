@@ -8,53 +8,92 @@ import yaml
 from app.config import settings
 
 WEIGHT_FIELDS = (
-    "infrastructure",
-    "road_comfort",
-    "speed",
     "traffic",
+    "speed",
+    "road_environment",
     "surface",
+    "calm_geometry",
     "grade",
 )
 
 
 @dataclass(frozen=True)
-class ProfileWeights:
-    infrastructure: float
-    road_comfort: float
-    speed: float
+class BaseWeights:
     traffic: float
+    speed: float
+    road_environment: float
     surface: float
+    calm_geometry: float
     grade: float
 
-    def as_tuple(self) -> tuple[float, float, float, float, float, float]:
+    def as_dict(self) -> dict[str, float]:
+        return {
+            "traffic": self.traffic,
+            "speed": self.speed,
+            "road_environment": self.road_environment,
+            "surface": self.surface,
+            "calm_geometry": self.calm_geometry,
+            "grade": self.grade,
+        }
+
+    def as_tuple(self) -> tuple[float, ...]:
         return (
-            self.infrastructure,
-            self.road_comfort,
-            self.speed,
             self.traffic,
+            self.speed,
+            self.road_environment,
             self.surface,
+            self.calm_geometry,
             self.grade,
         )
 
 
 @dataclass(frozen=True)
+class ProfileConfig:
+    weights: BaseWeights
+    infra_scale: float = 1.0
+    context_scale: float = 1.0
+    interaction_scale: float = 1.0
+
+
+# Historical alias used by older tests/imports.
+ProfileWeights = ProfileConfig
+
+
+@dataclass(frozen=True)
+class InteractionTerm:
+    id: str
+    delta: float
+
+
+@dataclass(frozen=True)
+class RoutingCostParams:
+    gamma: float = 1.6
+    avoid_score: float = 3.0
+    avoid_factor: float = 1.3
+
+
+@dataclass(frozen=True)
 class ScoringConfig:
     version: int
-    profiles: dict[str, ProfileWeights]
+    profiles: dict[str, ProfileConfig]
+    infra_bonus: dict[str, float]
+    context_bonus: dict[str, float]
+    interactions: tuple[InteractionTerm, ...]
+    routing: RoutingCostParams
 
 
-def _validate_weights(profile_name: str, weights: dict[str, Any]) -> ProfileWeights:
+def _validate_weights(profile_name: str, weights: dict[str, Any]) -> BaseWeights:
     missing = set(WEIGHT_FIELDS) - set(weights)
     if missing:
         msg = f"Profile '{profile_name}' is missing weights: {sorted(missing)}"
         raise ValueError(msg)
 
-    parsed = ProfileWeights(
-        infrastructure=float(weights["infrastructure"]),
-        road_comfort=float(weights["road_comfort"]),
-        speed=float(weights["speed"]),
+    parsed = BaseWeights(
         traffic=float(weights["traffic"]),
+        speed=float(weights["speed"]),
+        road_environment=float(weights["road_environment"]),
         surface=float(weights["surface"]),
+        calm_geometry=float(weights["calm_geometry"]),
         grade=float(weights["grade"]),
     )
     values = parsed.as_tuple()
@@ -67,15 +106,47 @@ def _validate_weights(profile_name: str, weights: dict[str, Any]) -> ProfileWeig
     return parsed
 
 
+def _validate_profile(profile_name: str, raw: dict[str, Any]) -> ProfileConfig:
+    weights = _validate_weights(profile_name, raw["weights"])
+    return ProfileConfig(
+        weights=weights,
+        infra_scale=float(raw.get("infra_scale", 1.0)),
+        context_scale=float(raw.get("context_scale", 1.0)),
+        interaction_scale=float(raw.get("interaction_scale", 1.0)),
+    )
+
+
 def load_scoring_config(path: Path | None = None) -> ScoringConfig:
     config_path = path or settings.scoring_config_path
     raw = yaml.safe_load(config_path.read_text())
     version = int(raw["version"])
     profiles = {
-        profile_name: _validate_weights(profile_name, profile["weights"])
+        profile_name: _validate_profile(profile_name, profile)
         for profile_name, profile in raw["profiles"].items()
     }
-    return ScoringConfig(version=version, profiles=profiles)
+    routing_raw = raw.get("routing") or {}
+    interactions = tuple(
+        InteractionTerm(id=str(item["id"]), delta=float(item["delta"]))
+        for item in raw.get("interactions") or []
+    )
+    return ScoringConfig(
+        version=version,
+        profiles=profiles,
+        infra_bonus={
+            str(key): float(value)
+            for key, value in (raw.get("infra_bonus") or {}).items()
+        },
+        context_bonus={
+            str(key): float(value)
+            for key, value in (raw.get("context_bonus") or {}).items()
+        },
+        interactions=interactions,
+        routing=RoutingCostParams(
+            gamma=float(routing_raw.get("gamma", 1.6)),
+            avoid_score=float(routing_raw.get("avoid_score", 3.0)),
+            avoid_factor=float(routing_raw.get("avoid_factor", 1.3)),
+        ),
+    )
 
 
 @lru_cache(maxsize=1)
@@ -83,7 +154,7 @@ def cached_scoring_config() -> ScoringConfig:
     return load_scoring_config()
 
 
-def get_profile(profile_id: str, config: ScoringConfig | None = None) -> ProfileWeights:
+def get_profile(profile_id: str, config: ScoringConfig | None = None) -> ProfileConfig:
     scoring = config or cached_scoring_config()
     if profile_id not in scoring.profiles:
         msg = f"Unknown profile '{profile_id}'."

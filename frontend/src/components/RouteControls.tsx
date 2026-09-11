@@ -1,3 +1,4 @@
+import { Download, LocateFixed, Map as MapIcon, Route } from "lucide-react";
 import type { PlannerMode } from "../hooks/usePlanner";
 import type { CitySummary, CyclingProfile } from "../types/api";
 
@@ -46,6 +47,7 @@ export function RouteControls({
           className={mode === "manual" ? "active" : ""}
           onClick={() => setMode("manual")}
         >
+          <MapIcon size={16} strokeWidth={1.75} />
           Plan
         </button>
         <button
@@ -53,6 +55,7 @@ export function RouteControls({
           className={mode === "auto" ? "active" : ""}
           onClick={() => setMode("auto")}
         >
+          <Route size={16} strokeWidth={1.75} />
           Generate
         </button>
       </div>
@@ -78,7 +81,7 @@ export function RouteControls({
         </select>
       </label>
       <label>
-        Shorter / Faster ↔ Most Bikeable ({Math.round(bikeabilityWeight * 100)}%)
+        Shorter — more bikeable ({Math.round(bikeabilityWeight * 100)}%)
         <input
           type="range"
           min={0}
@@ -100,21 +103,25 @@ export function RouteControls({
               onChange={(event) => setTargetDistanceMi(Number(event.target.value))}
             />
           </label>
-          <button type="button" onClick={onGenerate} disabled={loading}>
-            {loading ? "Finding a route…" : "Generate Route"}
+          <button type="button" className="primary" onClick={onGenerate} disabled={loading}>
+            {loading ? "Finding a route…" : "Generate route"}
           </button>
         </>
       ) : (
-        <p className="hint">Tap the map to add numbered waypoints.</p>
+        <p className="hint">Click the map to add numbered waypoints.</p>
       )}
-      <button type="button" onClick={onLocate}>
-        Use my location
-      </button>
-      {hasRoute ? (
-        <button type="button" onClick={onExport}>
-          Export GPX
+      <div className="btn-row">
+        <button type="button" className="secondary" onClick={onLocate}>
+          <LocateFixed size={16} strokeWidth={1.75} />
+          Use my location
         </button>
-      ) : null}
+        {hasRoute ? (
+          <button type="button" className="secondary" onClick={onExport}>
+            <Download size={16} strokeWidth={1.75} />
+            Export GPX
+          </button>
+        ) : null}
+      </div>
     </section>
   );
 }

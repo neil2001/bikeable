@@ -7,6 +7,7 @@ from app.features.apply import (
 )
 from app.features.builder import build_features
 from app.features.normalize import (
+    classify_infra,
     collect_cycleway_tags,
     is_traversable,
     normalize_lane_count,
@@ -42,6 +43,7 @@ def test_cycleway_both_is_detected() -> None:
     assert "lane" in tags
     features = build_features(edge)
     assert features.dedicated_bike_lane is True
+    assert features.infra_class == "lane"
     assert features.infrastructure_quality == 0.60
 
 
@@ -49,20 +51,50 @@ def test_protected_cycleway_scores_highest() -> None:
     edge = _edge(**{"cycleway:both": "track"})
     features = build_features(edge)
     assert features.protected_infrastructure is True
-    assert features.infrastructure_quality == 1.00
+    assert features.infra_class == "separate_or_track"
+    assert features.infrastructure_quality == 0.95
+
+
+def test_cycleway_no_is_infra_none() -> None:
+    features = build_features(_edge(**{"cycleway:left": "no", "cycleway:right": "no"}))
+    assert classify_infra(_edge(**{"cycleway:left": "no"})) == "none"
+    assert features.infra_class == "none"
+    assert features.infrastructure_quality == 0.00
+
+
+def test_missing_surface_is_omitted() -> None:
+    features = build_features(_edge())
+    assert features.surface_quality is None
+    assert features.grade_comfort is None
+
+
+def test_asphalt_surface_is_known() -> None:
+    features = build_features(_edge(surface="asphalt"))
+    assert features.surface_quality == 1.00
 
 
 def test_motorway_and_bicycle_no_are_not_traversable() -> None:
     assert is_traversable(_edge(highway="motorway")) is False
     assert is_traversable(_edge(bicycle="no")) is False
     assert is_traversable(_edge(highway="trunk")) is True
+    assert is_traversable(_edge(highway="busway")) is False
+    assert is_traversable(_edge(highway="busway", bicycle="yes")) is True
 
 
-def test_missing_traffic_uses_neutral_comfort() -> None:
+def test_missing_traffic_uses_class_proxy() -> None:
     features = build_features(_edge())
     assert features.traffic_volume is None
-    assert features.traffic_comfort == 0.50
-    assert features.traffic_confidence == 0.0
+    assert features.traffic_imputed is True
+    assert features.traffic_confidence < 1.0
+    assert features.traffic_comfort > 0.35
+
+
+def test_primary_proxy_is_not_calm() -> None:
+    features = build_features(
+        _edge(highway="primary", maxspeed="50", lanes="6"),
+    )
+    assert features.traffic_imputed is True
+    assert features.traffic_comfort < 0.35
 
 
 def test_quality_scores_are_within_unit_interval() -> None:
@@ -80,9 +112,20 @@ def test_quality_scores_are_within_unit_interval() -> None:
             "traffic_comfort",
             "surface_quality",
             "grade_comfort",
+            "calm_geometry",
         ):
             value = getattr(features, attr)
+            if value is None:
+                continue
             assert 0.0 <= value <= 1.0, attr
+
+
+def test_park_and_lcn_context() -> None:
+    park = build_features(_edge(in_park=True, highway="tertiary", maxspeed="30"))
+    lcn = build_features(_edge(lcn="yes"))
+    assert park.context_class == "park"
+    assert lcn.context_class == "lcn"
+    assert park.infra_class == "none"
 
 
 def test_apply_features_writes_feat_namespace() -> None:
@@ -90,6 +133,7 @@ def test_apply_features_writes_feat_namespace() -> None:
     apply_features_to_graph(graph)
     for _source, _target, _key, edge_data in graph.edges(keys=True, data=True):
         assert feature_key("traversable") in edge_data
+        assert feature_key("infra_class") in edge_data
         assert feature_key("road_comfort") in edge_data
         assert 0.0 <= edge_data[feature_key("road_comfort")] <= 1.0
 
@@ -101,6 +145,7 @@ def test_read_features_from_edge_round_trip() -> None:
     write_features_to_edge(edge_data, features)
     restored = read_features_from_edge(edge_data)
     assert restored.infrastructure_quality == features.infrastructure_quality
+    assert restored.infra_class == features.infra_class
     assert restored.speed_kph == pytest.approx(features.speed_kph)
 
 

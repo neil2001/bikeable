@@ -1,181 +1,529 @@
-.planner {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background: #f4f7fb;
-  color: #111827;
-}
-
-.planner-header {
-  padding: 1rem 1.25rem 0.5rem;
-}
-
-.planner-header h1 {
-  margin: 0;
-  font-size: 1.5rem;
-}
-
-.planner-header p {
-  margin: 0.25rem 0 0;
-  color: #4b5563;
-}
-
-.planner-body {
-  flex: 1;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 22rem;
-  gap: 1rem;
-  padding: 0 1rem 1rem;
-}
-
-.map-panel {
+.planner-app {
   position: relative;
-  min-height: 70vh;
-  border-radius: 1rem;
+  width: 100vw;
+  height: 100vh;
   overflow: hidden;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+  color: var(--fg);
+}
+
+.map-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
 }
 
 .map-container {
   width: 100%;
   height: 100%;
-  min-height: 70vh;
 }
 
-.details-panel {
+.heatmap-loading {
+  position: absolute;
+  top: var(--space-4);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 12;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 0.45rem 0.8rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.maplibregl-ctrl-attrib {
+  font-size: 0.7rem;
+}
+
+.floating-header {
+  position: absolute;
+  top: var(--space-4);
+  left: var(--space-4);
+  z-index: 10;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: var(--space-3) var(--space-4);
+  max-width: 20rem;
+}
+
+.brand-group {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.brand-group h1 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.city-pill {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.subtitle {
+  margin: var(--space-1) 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.panel-toggle-btn {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  z-index: 15;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--fg);
+  padding: 0.4rem 0.7rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.panel-toggle-btn:hover {
+  border-color: var(--fg);
+}
+
+.panel-toggle-btn.open {
+  right: calc(var(--panel-width) + var(--space-5));
+}
+
+.floating-panel {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  bottom: var(--space-4);
+  width: var(--panel-width);
+  z-index: 10;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  background: rgba(255, 255, 255, 0.96);
-  border-radius: 1rem;
-  padding: 1rem;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
-  overflow: auto;
+  gap: var(--space-4);
+  overflow-y: auto;
+  transition: transform 0.18s ease-out, opacity 0.18s ease-out;
+}
+
+.floating-panel.collapsed {
+  transform: translateX(calc(100% + var(--space-5)));
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sheet-handle {
+  display: none;
+}
+
+.error-banner {
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  padding: var(--space-2) var(--space-3);
+  font-size: 0.82rem;
+}
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.mode-toggle {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+}
+
+.mode-toggle button {
+  flex: 1;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: transparent;
+  color: var(--muted);
+  padding: var(--space-2) 0;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.mode-toggle button.active {
+  color: var(--fg);
+  border-bottom-color: var(--accent);
+}
+
+.controls label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.controls select,
+.controls input[type="number"] {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.45rem 0.55rem;
+  font-size: 0.88rem;
+  background: var(--surface);
+  color: var(--fg);
+}
+
+.controls input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.controls .btn-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.controls button.primary,
+.controls button.secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border-radius: var(--radius);
+  padding: 0.55rem 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.controls button.primary {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fbfaf6;
+}
+
+.controls button.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.controls button.primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.controls button.secondary {
+  border: 1px solid var(--border);
+  background: transparent;
+}
+
+.controls button.secondary:hover {
+  border-color: var(--fg);
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.summary {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3) var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.summary.placeholder {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-3);
+}
+
+.summary dt {
+  font-size: 0.7rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.summary dd {
+  margin: 0.1rem 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.charts h3 {
+  margin: 0 0 var(--space-1);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.chart-summary {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.road-inspector {
+  position: relative;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: 0.85rem;
+}
+
+.road-inspector h2 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.road-inspector dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+}
+
+.road-inspector dt {
+  color: var(--muted);
+}
+
+.road-inspector dd {
+  margin: 0;
+}
+
+.inspection-reasons {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.score-line strong {
+  font-family: var(--font-mono);
+}
+
+.close-button {
+  position: absolute;
+  top: var(--space-2);
+  right: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: var(--space-1);
+  cursor: pointer;
+  display: inline-flex;
+}
+
+.close-button:hover {
+  color: var(--fg);
+}
+
+.waypoint-marker-container {
+  /* Keep position unset so MapLibre's position:absolute on the marker root wins. */
+  width: 1.75rem;
+  height: 1.75rem;
+  cursor: grab;
+  user-select: none;
+}
+
+.waypoint-marker-container:active {
+  cursor: grabbing;
+}
+
+.waypoint-marker-inner {
+  position: relative;
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.waypoint-marker {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 999px;
+  border: 2px solid var(--surface);
+  background: var(--accent);
+  color: #fbfaf6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 0.75rem;
+}
+
+.waypoint-marker.start {
+  background: var(--fg);
+}
+
+.waypoint-remove-btn {
+  position: absolute;
+  top: -0.35rem;
+  right: -0.35rem;
+  width: 1.05rem;
+  height: 1.05rem;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  border: 1px solid var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.waypoint-remove-btn svg {
+  width: 12px;
+  height: 12px;
+  display: block;
+  flex-shrink: 0;
+}
+
+.waypoint-marker-container:hover .waypoint-remove-btn,
+.waypoint-marker-container:focus-within .waypoint-remove-btn {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (hover: none) {
+  .waypoint-remove-btn {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 .legend {
   position: absolute;
-  left: 1rem;
-  bottom: 1rem;
-  background: rgba(255, 255, 255, 0.95);
-  padding: 0.75rem 1rem;
-  border-radius: 0.75rem;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+  left: var(--space-4);
+  bottom: var(--space-4);
+  z-index: 5;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: var(--space-3);
+  min-width: 12.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.legend-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.legend-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.legend-toggle input {
+  accent-color: var(--accent);
+}
+
+.legend-opacity-val {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.legend-bar {
+  height: 4px;
+  background: linear-gradient(to right, #e7298a 0%, #d95f02 40%, #66a61e 70%, #1b9e77 100%);
 }
 
 .legend-scale {
   display: flex;
   justify-content: space-between;
-  gap: 0.75rem;
-  font-size: 0.85rem;
+  font-size: 0.68rem;
+  color: var(--muted);
 }
 
-.controls,
-.summary,
-.charts,
-.road-inspector {
+.legend-opacity-slider {
   display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.68rem;
+  color: var(--muted);
 }
 
-.controls label,
-.mode-toggle,
-.summary div {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.mode-toggle {
-  flex-direction: row;
-}
-
-.mode-toggle button,
-.controls button {
-  border: 0;
-  border-radius: 999px;
-  padding: 0.75rem 1rem;
-  background: #111827;
-  color: white;
-  font-weight: 600;
-}
-
-.mode-toggle button {
+.legend-opacity-slider input {
   flex: 1;
-  background: #e5e7eb;
-  color: #111827;
+  accent-color: var(--accent);
 }
 
-.mode-toggle button.active {
-  background: #111827;
-  color: white;
-}
-
-.summary {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.75rem;
-}
-
-.summary dt {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  color: #6b7280;
-}
-
-.summary dd {
-  margin: 0;
-  font-size: 1.1rem;
-  font-weight: 700;
-}
-
-.hint,
-.chart-summary,
-.error {
-  margin: 0;
-  color: #4b5563;
-}
-
-.error {
-  color: #b91c1c;
-}
-
-.road-inspector {
-  position: relative;
-  padding: 0.75rem;
-  border-radius: 0.75rem;
-  background: #f9fafb;
-}
-
-.close-button {
-  position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
-  border: 0;
-  background: transparent;
-  font-size: 1.25rem;
-}
-
-.waypoint-marker {
-  width: 2rem;
-  height: 2rem;
-  border-radius: 999px;
-  border: 2px solid white;
-  background: #2563eb;
-  color: white;
-  font-weight: 700;
-}
-
-@media (max-width: 900px) {
-  .planner-body {
-    grid-template-columns: 1fr;
-    grid-template-rows: minmax(55vh, 1fr) auto;
+@media (max-width: 768px) {
+  .floating-header {
+    top: var(--space-3);
+    left: var(--space-3);
+    right: var(--space-3);
+    max-width: none;
   }
 
-  .details-panel {
-    position: sticky;
+  .panel-toggle-btn {
+    top: auto;
+    bottom: calc(70vh + 0.75rem);
+    right: var(--space-3);
+  }
+
+  .panel-toggle-btn.open {
+    right: var(--space-3);
+  }
+
+  .floating-panel {
+    top: auto;
+    left: 0;
+    right: 0;
     bottom: 0;
-    max-height: 45vh;
+    width: 100%;
+    max-height: 72vh;
+    padding: var(--space-3) var(--space-4) var(--space-5);
+  }
+
+  .floating-panel.collapsed {
+    transform: translateY(calc(100% - 3.5rem));
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .sheet-handle {
+    display: block;
+    width: 2.25rem;
+    height: 3px;
+    background: var(--border);
+    margin: 0 auto var(--space-2);
+    cursor: pointer;
+  }
+
+  .legend {
+    left: var(--space-3);
+    bottom: 4.5rem;
+    min-width: 10.5rem;
   }
 }

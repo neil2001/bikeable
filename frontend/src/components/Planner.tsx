@@ -1,4 +1,5 @@
-import { useMemo } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useMemo, useState } from "react";
 import { getDefaultCityId } from "../api/client";
 import { usePlanner } from "../hooks/usePlanner";
 import { MapView } from "../map/MapView";
@@ -12,6 +13,10 @@ const DEFAULT_CENTER = { lat: 49.2827, lon: -123.1207 };
 
 export function Planner() {
   const planner = usePlanner();
+  const [showHeatmap, setShowHeatmap] = useState(true);
+  const [heatmapOpacity, setHeatmapOpacity] = useState(0.85);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
   const mapCenter = planner.start ?? planner.waypoints[0] ?? DEFAULT_CENTER;
   const routeCoordinates = useMemo(() => {
     if (planner.route) {
@@ -20,57 +25,109 @@ export function Planner() {
     return planner.segmentGeometries;
   }, [planner.route, planner.segmentGeometries]);
 
+  const cityName =
+    planner.selectedCity?.name ??
+    (getDefaultCityId() === "fixture" ? "Fixture Network" : "Vancouver metro");
+
   return (
-    <div className="planner">
-      <header className="planner-header">
-        <h1>Bikeable</h1>
-        <p>Map-first cycling planner for {getDefaultCityId() === "fixture" ? "Vancouver (fixture)" : "Vancouver"}.</p>
-      </header>
-      <div className="planner-body">
-        <div className="map-panel">
-          <MapView
-            center={mapCenter}
-            heatmapFeatures={planner.heatmapFeatures}
-            routeCoordinates={routeCoordinates}
-            waypoints={planner.waypoints}
-            onMapClick={planner.addWaypoint}
-            onRoadClick={planner.inspectRoadAt}
-            cursorDistanceM={planner.cursorDistanceM}
-          />
-          <BikeabilityLegend />
-        </div>
-        <aside className="details-panel">
-          {planner.error ? <p className="error">{planner.error}</p> : null}
-          <RouteSummary route={planner.route} loading={planner.loading} />
-          <RouteControls
-            mode={planner.mode}
-            setMode={planner.setMode}
-            profile={planner.profile}
-            setProfile={planner.setProfile}
-            bikeabilityWeight={planner.bikeabilityWeight}
-            setBikeabilityWeight={planner.setBikeabilityWeight}
-            targetDistanceMi={planner.targetDistanceMi}
-            setTargetDistanceMi={planner.setTargetDistanceMi}
-            cityId={planner.cityId}
-            setCityId={planner.setCityId}
-            cities={planner.cities}
-            loading={planner.loading}
-            onGenerate={() => void planner.generateAutoRoute()}
-            onLocate={planner.useCurrentLocation}
-            onExport={() => void planner.exportRoute()}
-            hasRoute={Boolean(planner.route)}
-          />
-          <RouteCharts
-            route={planner.route}
-            cursorDistanceM={planner.cursorDistanceM}
-            onCursorChange={planner.setCursorDistanceM}
-          />
-          <RoadInspector
-            inspection={planner.roadInspection}
-            onClose={() => planner.setRoadInspection(null)}
-          />
-        </aside>
+    <div className="planner-app">
+      <div className="map-layer">
+        {planner.heatmapLoading ? (
+          <div className="heatmap-loading" aria-live="polite">Loading roads…</div>
+        ) : null}
+        <MapView
+          center={mapCenter}
+          cityBbox={planner.selectedCity?.bbox}
+          heatmapFeatures={planner.heatmapFeatures}
+          routeCoordinates={routeCoordinates}
+          waypoints={planner.waypoints}
+          start={planner.start}
+          mode={planner.mode}
+          showHeatmap={showHeatmap}
+          heatmapOpacity={heatmapOpacity}
+          onMapClick={planner.addWaypoint}
+          onRoadClick={planner.inspectRoadAt}
+          onMoveWaypoint={planner.moveWaypoint}
+          onRemoveWaypoint={planner.removeWaypoint}
+          onMoveStart={planner.setStart}
+          cursorDistanceM={planner.cursorDistanceM}
+        />
+        <BikeabilityLegend
+          showHeatmap={showHeatmap}
+          onToggleHeatmap={() => setShowHeatmap((prev) => !prev)}
+          opacity={heatmapOpacity}
+          onOpacityChange={setHeatmapOpacity}
+        />
       </div>
+
+      <header className="floating-header">
+        <div className="brand-group">
+          <h1>Bikeable</h1>
+          <span className="city-pill">{cityName}</span>
+        </div>
+        <p className="subtitle">
+          {planner.mode === "manual"
+            ? "Click to drop a waypoint. Drag the map to pan."
+            : "Click a start, then generate a loop."}
+        </p>
+      </header>
+
+      <button
+        type="button"
+        className={`panel-toggle-btn ${sidebarOpen ? "open" : "collapsed"}`}
+        onClick={() => setSidebarOpen((prev) => !prev)}
+        aria-label={sidebarOpen ? "Collapse route panel" : "Expand route panel"}
+      >
+        {sidebarOpen ? (
+          <>
+            Hide
+            <ChevronRight size={16} strokeWidth={1.75} />
+          </>
+        ) : (
+          <>
+            <ChevronLeft size={16} strokeWidth={1.75} />
+            Route
+          </>
+        )}
+      </button>
+
+      <aside className={`floating-panel ${sidebarOpen ? "open" : "collapsed"}`}>
+        <div className="sheet-handle" onClick={() => setSidebarOpen((prev) => !prev)} />
+
+        {planner.error ? <div className="error-banner">{planner.error}</div> : null}
+
+        <RouteControls
+          mode={planner.mode}
+          setMode={planner.setMode}
+          profile={planner.profile}
+          setProfile={planner.setProfile}
+          bikeabilityWeight={planner.bikeabilityWeight}
+          setBikeabilityWeight={planner.setBikeabilityWeight}
+          targetDistanceMi={planner.targetDistanceMi}
+          setTargetDistanceMi={planner.setTargetDistanceMi}
+          cityId={planner.cityId}
+          setCityId={planner.setCityId}
+          cities={planner.cities}
+          loading={planner.loading}
+          onGenerate={() => void planner.generateAutoRoute()}
+          onLocate={planner.useCurrentLocation}
+          onExport={() => void planner.exportRoute()}
+          hasRoute={Boolean(planner.route)}
+        />
+
+        <RouteSummary route={planner.route} loading={planner.loading} />
+
+        <RouteCharts
+          route={planner.route}
+          cursorDistanceM={planner.cursorDistanceM}
+          onCursorChange={planner.setCursorDistanceM}
+        />
+
+        <RoadInspector
+          inspection={planner.roadInspection}
+          onClose={() => planner.setRoadInspection(null)}
+        />
+      </aside>
     </div>
   );
 }

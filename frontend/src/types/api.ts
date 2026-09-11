@@ -143,11 +143,15 @@ export type RoadInspectionResponse = {
     components: {
       infrastructure: number;
       roadComfort: number;
-      speed: number;
+      environment: number;
+      speed?: number | null;
       traffic: number;
-      surface: number;
-      grade: number;
+      surface?: number | null;
+      grade?: number | null;
+      context: number;
+      calmGeometry: number;
     };
+    reasons: string[];
   };
   profile: CyclingProfile;
 };

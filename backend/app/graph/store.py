@@ -28,18 +28,33 @@ def processed_graph_paths(processed_root: Path, city_id: str) -> ProcessedGraphP
     )
 
 
+def section_graph_paths(
+    processed_root: Path,
+    city_id: str,
+    section_id: str,
+) -> ProcessedGraphPaths:
+    section_dir = processed_root / city_id / "sections" / section_id
+    return ProcessedGraphPaths(
+        city_dir=section_dir,
+        graphml=section_dir / "graph.graphml",
+        pickle=section_dir / "graph.pkl",
+        metadata=section_dir / "metadata.json",
+    )
+
+
 def save_processed_graph(
     graph: nx.MultiDiGraph,
     *,
     processed_root: Path,
     city_id: str,
     source: str,
+    paths: ProcessedGraphPaths | None = None,
 ) -> ProcessedGraphPaths:
-    paths = processed_graph_paths(processed_root, city_id)
-    paths.city_dir.mkdir(parents=True, exist_ok=True)
+    resolved_paths = paths or processed_graph_paths(processed_root, city_id)
+    resolved_paths.city_dir.mkdir(parents=True, exist_ok=True)
 
-    ox.save_graphml(graph, paths.graphml)
-    paths.pickle.write_bytes(pickle.dumps(graph))
+    ox.save_graphml(graph, resolved_paths.graphml)
+    resolved_paths.pickle.write_bytes(pickle.dumps(graph))
 
     metadata = {
         "cityId": city_id,
@@ -49,15 +64,17 @@ def save_processed_graph(
         "nodeCount": graph.number_of_nodes(),
         "edgeCount": graph.number_of_edges(),
     }
-    paths.metadata.write_text(json.dumps(metadata, indent=2) + "\n")
-    return paths
+    resolved_paths.metadata.write_text(json.dumps(metadata, indent=2) + "\n")
+    return resolved_paths
 
 
 def load_processed_graph(paths: ProcessedGraphPaths) -> nx.MultiDiGraph:
-    if not paths.graphml.exists():
-        msg = f"Processed graph not found at {paths.graphml}"
-        raise FileNotFoundError(msg)
-    return normalize_loaded_graph(ox.load_graphml(paths.graphml))
+    if paths.pickle.exists():
+        return normalize_loaded_graph(pickle.loads(paths.pickle.read_bytes()))
+    if paths.graphml.exists():
+        return normalize_loaded_graph(ox.load_graphml(paths.graphml))
+    msg = f"Processed graph not found at {paths.pickle} or {paths.graphml}"
+    raise FileNotFoundError(msg)
 
 
 def normalize_loaded_graph(graph: nx.MultiDiGraph) -> nx.MultiDiGraph:
@@ -72,3 +89,7 @@ def read_graph_metadata(paths: ProcessedGraphPaths) -> dict[str, object]:
         msg = f"Graph metadata not found at {paths.metadata}"
         raise FileNotFoundError(msg)
     return json.loads(paths.metadata.read_text())
+
+
+def graph_cache_exists(paths: ProcessedGraphPaths) -> bool:
+    return paths.pickle.exists() or paths.graphml.exists()

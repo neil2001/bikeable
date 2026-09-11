@@ -9,10 +9,13 @@ PROTECTED_CYCLEWAY_VALUES = {
     "separate",
     "buffer",
 }
+ABSENT_CYCLEWAY_VALUES = {"no", "none", "no_lane"}
 DEDICATED_PATH_HIGHWAYS = {"cycleway", "path", "footway", "pedestrian"}
 BIKE_LANE_VALUES = {"lane", "opposite_lane"}
-SHARED_LANE_VALUES = {"share_busway", "shared_lane"}
+SHARED_LANE_VALUES = {"share_busway"}
 SHARROW_VALUES = {"shared_lane", "sharrow"}
+NETWORK_YES_VALUES = {"yes", "true", "1"}
+ONEWAY_VALUES = {"yes", "true", "1", "-1"}
 
 
 def coerce_tag(value: Any) -> str | None:
@@ -97,6 +100,68 @@ def collect_cycleway_tags(edge_data: dict[str, Any]) -> list[str]:
     return tags
 
 
+def present_cycleway_tags(edge_data: dict[str, Any]) -> list[str]:
+    return [
+        tag
+        for tag in collect_cycleway_tags(edge_data)
+        if tag not in ABSENT_CYCLEWAY_VALUES
+    ]
+
+
+def normalize_oneway(value: Any) -> bool:
+    text = coerce_tag(value)
+    if text is None:
+        return False
+    return text.lower() in ONEWAY_VALUES
+
+
+def has_cycle_network(edge_data: dict[str, Any]) -> bool:
+    for key in ("lcn", "rcn", "ncn"):
+        text = coerce_tag(edge_data.get(key))
+        if text is not None and text.lower() in NETWORK_YES_VALUES:
+            return True
+    return False
+
+
+def normalize_grade(value: Any) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    text = str(value).strip().lower()
+    if not text or text in {"up", "down", "yes"}:
+        return None
+    percent = re.search(r"(-?[\d.]+)\s*%", text)
+    if percent:
+        return float(percent.group(1)) / 100.0
+    numeric = re.fullmatch(r"-?[\d.]+", text)
+    if numeric:
+        number = float(text)
+        return number / 100.0 if abs(number) > 1 else number
+    return None
+
+
+def classify_infra(edge_data: dict[str, Any]) -> str:
+    highway = normalize_highway_class(edge_data.get("highway"))
+    bicycle = normalize_bicycle_access(edge_data.get("bicycle"))
+    tags = present_cycleway_tags(edge_data)
+
+    if highway == "cycleway":
+        return "exclusive_cycleway"
+    if any(tag in PROTECTED_CYCLEWAY_VALUES for tag in tags):
+        return "separate_or_track"
+    if any(tag in BIKE_LANE_VALUES for tag in tags):
+        return "lane"
+    if bicycle == "designated" or has_cycle_network(edge_data):
+        return "designated_or_lcn"
+    if any(tag in SHARED_LANE_VALUES for tag in tags):
+        return "shared"
+    if any(tag in SHARROW_VALUES for tag in tags):
+        return "sharrow"
+    return "none"
+
+
 def has_protected_infrastructure(edge_data: dict[str, Any]) -> bool:
     highway = normalize_highway_class(edge_data.get("highway"))
     if highway == "cycleway":
@@ -142,6 +207,9 @@ def is_traversable(edge_data: dict[str, Any]) -> bool:
 
     bicycle = normalize_bicycle_access(edge_data.get("bicycle"))
     if bicycle == "no":
+        return False
+
+    if highway == "busway" and bicycle not in {"yes", "designated"}:
         return False
 
     access = coerce_tag(edge_data.get("access"))
