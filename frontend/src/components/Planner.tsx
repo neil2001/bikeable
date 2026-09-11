@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, LoaderCircle } from "lucide-react";
 import { useMemo, useState } from "react";
 import { getDefaultCityId } from "../api/client";
 import { usePlanner } from "../hooks/usePlanner";
@@ -35,8 +35,11 @@ export function Planner() {
   return (
     <div className="planner-app">
       <div className="map-layer">
-        {planner.heatmapLoading ? (
-          <div className="heatmap-loading" aria-live="polite">Loading roads…</div>
+        {planner.loading || planner.heatmapLoading ? (
+          <div className="map-status" role="status" aria-live="polite">
+            <LoaderCircle className="spin" size={14} strokeWidth={2} aria-hidden />
+            {planner.loading ? "Computing route…" : "Loading roads…"}
+          </div>
         ) : null}
         <MapView
           center={mapCenter}

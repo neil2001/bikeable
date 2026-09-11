@@ -5,19 +5,27 @@ export const ACCENT = "#2f6b4f";
 export const ROUTE_COLOR = "#2563eb";
 export const ROUTE_CASING = "#ffffff";
 
+/** Thirds of the 0–10 bikeability scale. */
+export const BIKEABILITY_POOR_MAX = 10 / 3; // ~3.3
+export const BIKEABILITY_GOOD_MIN = (10 / 3) * 2; // ~6.6
+export const BIKEABILITY_MID = 5; // center of scale / middle of yellow band
+
+const BLEND = 0.3; // narrow transition band at each third boundary
+
 /**
  * Sequential bikeability stops shared by map layer and legend:
- * - 0 to ~3.3: Poor (muted neutral grey that recedes into the basemap)
- * - 3.3 to ~6.6: Moderate (warm amber/yellow in the middle range)
- * - 6.6 to 10: Good to Excellent (cycling green transitioning into teal)
+ * - 0–3.3: Poor (muted neutral grey)
+ * - 3.3–6.6: Moderate (warm amber/yellow)
+ * - 6.6–10: Good to Excellent (green transitioning into teal)
  *
- * Smooth linear transitions connect the ranges.
+ * Smooth linear transitions blend across each boundary.
  */
 export const BIKEABILITY_STOPS: { score: number; color: string }[] = [
   { score: 0, color: "#94a3b8" },
-  { score: 2.5, color: "#94a3b8" },
-  { score: 5.0, color: "#eab308" },
-  { score: 7.5, color: "#16a34a" },
+  { score: BIKEABILITY_POOR_MAX - BLEND, color: "#94a3b8" },
+  { score: BIKEABILITY_POOR_MAX + BLEND, color: "#eab308" },
+  { score: BIKEABILITY_GOOD_MIN - BLEND, color: "#eab308" },
+  { score: BIKEABILITY_GOOD_MIN + BLEND, color: "#16a34a" },
   { score: 10, color: "#0d9488" },
 ];
 

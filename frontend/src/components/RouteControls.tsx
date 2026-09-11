@@ -1,4 +1,4 @@
-import { Download, LocateFixed, Map as MapIcon, Route, Settings } from "lucide-react";
+import { Download, LoaderCircle, LocateFixed, Map as MapIcon, Route, Settings } from "lucide-react";
 import type { PlannerMode } from "../hooks/usePlanner";
 import type { CitySummary, CyclingProfile } from "../types/api";
 
@@ -149,7 +149,14 @@ export function RouteControls({
                 />
               </label>
               <button type="button" className="primary" onClick={onGenerate} disabled={loading}>
-                {loading ? "Finding a route…" : "Generate route"}
+                {loading ? (
+                  <>
+                    <LoaderCircle className="spin" size={16} strokeWidth={2} aria-hidden />
+                    Computing route…
+                  </>
+                ) : (
+                  "Generate route"
+                )}
               </button>
             </>
           ) : (
