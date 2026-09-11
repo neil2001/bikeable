@@ -7,17 +7,17 @@ export const ROUTE_CASING = "#ffffff";
 
 /**
  * Sequential bikeability stops shared by map layer and legend:
- * - 0–4 Poor: neutral slate grey that recedes into the basemap
- * - 5.5–7.2 Moderate: vibrant warm amber/yellow for typical streets
- * - 8.5 Good: fresh cycling green for dedicated bike routes
- * - 10 Excellent: vibrant teal for protected facilities
+ * - 0 to ~3.3: Poor (muted neutral grey that recedes into the basemap)
+ * - 3.3 to ~6.6: Moderate (warm amber/yellow in the middle range)
+ * - 6.6 to 10: Good to Excellent (cycling green transitioning into teal)
+ *
+ * Smooth linear transitions connect the ranges.
  */
 export const BIKEABILITY_STOPS: { score: number; color: string }[] = [
   { score: 0, color: "#94a3b8" },
-  { score: 4.0, color: "#94a3b8" },
-  { score: 5.5, color: "#f59e0b" },
-  { score: 7.2, color: "#f59e0b" },
-  { score: 8.5, color: "#16a34a" },
+  { score: 2.5, color: "#94a3b8" },
+  { score: 5.0, color: "#eab308" },
+  { score: 7.5, color: "#16a34a" },
   { score: 10, color: "#0d9488" },
 ];
 
