@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from app.api.errors import ApiError
 from app.models.common import ApiErrorCode, CyclingProfile
@@ -11,7 +11,7 @@ from app.models.responses import (
 from app.services.city_graph import (
     CityGraphUnavailableError,
     bikeability_etag,
-    get_bikeability_overlay,
+    get_bikeability_overlay_path,
 )
 from app.services.city_registry import get_city_summary, list_city_summaries
 
@@ -38,13 +38,14 @@ def get_city(cityId: str) -> CitySummary:
 
 @router.get(
     "/cities/{cityId}/bikeability",
-    response_model=BikeabilityNetworkResponse,
+    response_model=None,
+    responses={200: {"model": BikeabilityNetworkResponse}},
 )
 def get_city_bikeability(
     request: Request,
     cityId: str,
     profile: CyclingProfile = CyclingProfile.ROAD,
-) -> BikeabilityNetworkResponse | JSONResponse:
+) -> FileResponse | JSONResponse:
     try:
         get_city_summary(cityId)
     except KeyError:
@@ -56,7 +57,7 @@ def get_city_bikeability(
         ) from None
 
     try:
-        overlay = get_bikeability_overlay(cityId, profile.value)
+        overlay_path = get_bikeability_overlay_path(cityId, profile.value)
     except CityGraphUnavailableError as exc:
         raise ApiError(
             code=ApiErrorCode.GRAPH_UNAVAILABLE,
@@ -75,10 +76,12 @@ def get_city_bikeability(
             },
         )
 
-    return JSONResponse(
-        content=overlay.model_dump(by_alias=True),
+    return FileResponse(
+        overlay_path,
+        media_type="application/json",
         headers={
             "Cache-Control": "public, max-age=86400",
             "ETag": etag,
+            "Content-Encoding": "gzip",
         },
     )

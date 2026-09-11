@@ -7,6 +7,9 @@ import networkx as nx
 from pyproj import Transformer
 from shapely.ops import transform
 
+OVERLAY_SIMPLIFY_M = 10.0
+OVERLAY_COORD_DECIMALS = 5
+
 
 @lru_cache(maxsize=32)
 def get_crs_transformer(crs: str) -> Transformer:
@@ -48,3 +51,54 @@ def edge_to_wgs84_coordinates(
         pass
 
     return fallback
+
+
+def _round_and_dedupe(
+    coords: list[list[float]],
+    *,
+    decimals: int = OVERLAY_COORD_DECIMALS,
+) -> list[list[float]]:
+    if not coords:
+        return []
+    rounded = [
+        [round(point[0], decimals), round(point[1], decimals)] for point in coords
+    ]
+    deduped = [rounded[0]]
+    for point in rounded[1:]:
+        if point != deduped[-1]:
+            deduped.append(point)
+    if len(deduped) >= 2:
+        return deduped
+    if len(rounded) >= 2:
+        return [rounded[0], rounded[-1]]
+    return rounded
+
+
+def edge_to_overlay_coordinates(
+    graph: nx.MultiDiGraph,
+    source: int,
+    target: int,
+    edge_data: dict[str, Any],
+    *,
+    simplify_m: float = OVERLAY_SIMPLIFY_M,
+    decimals: int = OVERLAY_COORD_DECIMALS,
+) -> list[list[float]]:
+    """WGS84 overlay coords: simplify in metres, then round and drop duplicates."""
+    geom = edge_data.get("geometry")
+    crs = graph.graph.get("crs")
+    overlay_data = edge_data
+    if (
+        geom is not None
+        and hasattr(geom, "simplify")
+        and crs
+        and "4326" not in str(crs)
+        and simplify_m > 0
+    ):
+        simplified = geom.simplify(simplify_m, preserve_topology=False)
+        if simplified is not None and getattr(simplified, "is_empty", False) is False:
+            overlay_data = {**edge_data, "geometry": simplified}
+
+    return _round_and_dedupe(
+        edge_to_wgs84_coordinates(graph, source, target, overlay_data),
+        decimals=decimals,
+    )

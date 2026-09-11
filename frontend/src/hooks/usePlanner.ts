@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   downloadGpx,
   generateLoop,
-  getBikeabilityNetwork,
   getCities,
   getDefaultCityId,
   inspectRoad,
@@ -14,7 +13,6 @@ import type {
   CitySummary,
   Coordinate,
   CyclingProfile,
-  BikeabilityNetworkResponse,
   RoadInspectionResponse,
   RouteResponse,
 } from "../types/api";
@@ -34,9 +32,6 @@ export function usePlanner() {
   const [start, setStart] = useState<Coordinate | null>(null);
   const [route, setRoute] = useState<RouteResponse | null>(null);
   const [segmentGeometries, setSegmentGeometries] = useState<[number, number][][]>([]);
-  const [heatmapFeatures, setHeatmapFeatures] = useState<
-    BikeabilityNetworkResponse["features"]
-  >([]);
   const [heatmapLoading, setHeatmapLoading] = useState(true);
   const [roadInspection, setRoadInspection] = useState<RoadInspectionResponse | null>(null);
   const [cursorDistanceM, setCursorDistanceM] = useState<number | null>(null);
@@ -56,30 +51,9 @@ export function usePlanner() {
     void getCities().then((response) => setCities(response.cities));
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function loadHeatmap() {
-      setHeatmapLoading(true);
-      try {
-        const network = await getBikeabilityNetwork(cityId, profile);
-        if (!cancelled) {
-          setHeatmapFeatures(network.features);
-        }
-      } catch (cause) {
-        if (!cancelled && cause instanceof ApiClientError) {
-          setError(cause.message);
-        }
-      } finally {
-        if (!cancelled) {
-          setHeatmapLoading(false);
-        }
-      }
-    }
-    void loadHeatmap();
-    return () => {
-      cancelled = true;
-    };
-  }, [cityId, profile]);
+  const setHeatmapError = useCallback((message: string | null) => {
+    setError(message);
+  }, []);
 
   const refreshManualRoute = useCallback(
     async (points: Coordinate[]) => {
@@ -256,8 +230,9 @@ export function usePlanner() {
     setStart,
     route,
     segmentGeometries,
-    heatmapFeatures,
     heatmapLoading,
+    setHeatmapLoading,
+    setHeatmapError,
     roadInspection,
     setRoadInspection,
     cursorDistanceM,

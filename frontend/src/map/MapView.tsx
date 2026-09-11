@@ -1,7 +1,9 @@
 import * as maplibregl from "maplibre-gl";
 import type { FilterSpecification, LngLatBoundsLike, LngLatLike, Map, MapMouseEvent } from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
-import type { BikeabilityFeature, Coordinate } from "../types/api";
+import { getBikeabilityNetwork } from "../api/client";
+import { ApiClientError } from "../api/errors";
+import type { Coordinate, CyclingProfile } from "../types/api";
 import { BIKEABILITY_STOPS, ROUTE_CASING, ROUTE_COLOR } from "./colors";
 import { createLucideX } from "./icons";
 import { OSM_STANDARD_STYLE } from "./styles";
@@ -10,7 +12,8 @@ import "maplibre-gl/dist/maplibre-gl.css";
 type Props = {
   center: Coordinate;
   cityBbox?: { minLon: number; minLat: number; maxLon: number; maxLat: number } | null;
-  heatmapFeatures: BikeabilityFeature[];
+  heatmapCityId: string;
+  heatmapProfile: CyclingProfile;
   routeCoordinates: [number, number][][];
   waypoints: Coordinate[];
   start?: Coordinate | null;
@@ -24,6 +27,8 @@ type Props = {
   onMoveWaypoint?: (index: number, coordinate: Coordinate) => void;
   onRemoveWaypoint?: (index: number) => void;
   onMoveStart?: (coordinate: Coordinate) => void;
+  onHeatmapLoadingChange?: (loading: boolean) => void;
+  onHeatmapError?: (message: string | null) => void;
   cursorDistanceM: number | null;
 };
 
@@ -109,7 +114,8 @@ function createWaypointElement(label: string, title: string, isStart: boolean) {
 export function MapView({
   center,
   cityBbox,
-  heatmapFeatures,
+  heatmapCityId,
+  heatmapProfile,
   routeCoordinates,
   waypoints,
   start,
@@ -123,12 +129,13 @@ export function MapView({
   onMoveWaypoint,
   onRemoveWaypoint,
   onMoveStart,
+  onHeatmapLoadingChange,
+  onHeatmapError,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<Map | null>(null);
   const readyRef = useRef(false);
   const [mapReady, setMapReady] = useState(false);
-  const pendingHeatmapRef = useRef(heatmapFeatures);
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const lastFitRouteKeyRef = useRef<string>("");
   const lastCityRef = useRef<string>("");
@@ -138,15 +145,15 @@ export function MapView({
 
   const onRoadClickRef = useRef(onRoadClick);
   const onMapClickRef = useRef(onMapClick);
+  const onHeatmapLoadingChangeRef = useRef(onHeatmapLoadingChange);
+  const onHeatmapErrorRef = useRef(onHeatmapError);
 
   useEffect(() => {
     onRoadClickRef.current = onRoadClick;
     onMapClickRef.current = onMapClick;
+    onHeatmapLoadingChangeRef.current = onHeatmapLoadingChange;
+    onHeatmapErrorRef.current = onHeatmapError;
   });
-
-  useEffect(() => {
-    pendingHeatmapRef.current = heatmapFeatures;
-  }, [heatmapFeatures]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) {
@@ -180,6 +187,7 @@ export function MapView({
       map.addSource("bikeability", {
         type: "geojson",
         data: { type: "FeatureCollection", features: [] },
+        tolerance: 2,
       });
 
       map.addLayer({
@@ -225,12 +233,6 @@ export function MapView({
           "line-width": ["interpolate", ["linear"], ["zoom"], 10, 2.5, 13, 4.8, 16, 7.5],
           "line-opacity": 1.0,
         },
-      });
-
-      const bikeabilitySource = map.getSource("bikeability") as maplibregl.GeoJSONSource;
-      bikeabilitySource.setData({
-        type: "FeatureCollection",
-        features: pendingHeatmapRef.current,
       });
     });
 
@@ -282,9 +284,42 @@ export function MapView({
     if (!map || !readyRef.current) {
       return;
     }
-    const source = map.getSource("bikeability") as maplibregl.GeoJSONSource | undefined;
-    source?.setData({ type: "FeatureCollection", features: heatmapFeatures });
-  }, [heatmapFeatures, mapReady]);
+
+    let cancelled = false;
+    onHeatmapLoadingChangeRef.current?.(true);
+    onHeatmapErrorRef.current?.(null);
+
+    void getBikeabilityNetwork(heatmapCityId, heatmapProfile)
+      .then((network) => {
+        if (cancelled) {
+          return;
+        }
+        const source = map.getSource("bikeability") as maplibregl.GeoJSONSource | undefined;
+        source?.setData({
+          type: "FeatureCollection",
+          features: network.features,
+        });
+      })
+      .catch((cause: unknown) => {
+        if (cancelled) {
+          return;
+        }
+        const source = map.getSource("bikeability") as maplibregl.GeoJSONSource | undefined;
+        source?.setData({ type: "FeatureCollection", features: [] });
+        if (cause instanceof ApiClientError) {
+          onHeatmapErrorRef.current?.(cause.message);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          onHeatmapLoadingChangeRef.current?.(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [heatmapCityId, heatmapProfile, mapReady]);
 
   useEffect(() => {
     const map = mapRef.current;

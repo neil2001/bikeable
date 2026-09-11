@@ -10,6 +10,7 @@ def test_bikeability_network_for_fixture_city() -> None:
     payload = response.json()
     assert payload["cityId"] == "fixture"
     assert payload["scoreVersion"] == "2"
+    assert payload["type"] == "FeatureCollection"
     assert len(payload["features"]) > 0
     feature = payload["features"][0]
     assert "roadId" in feature["properties"]

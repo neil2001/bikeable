@@ -41,7 +41,8 @@ export function Planner() {
         <MapView
           center={mapCenter}
           cityBbox={planner.selectedCity?.bbox}
-          heatmapFeatures={planner.heatmapFeatures}
+          heatmapCityId={planner.cityId}
+          heatmapProfile={planner.profile}
           routeCoordinates={routeCoordinates}
           waypoints={planner.waypoints}
           start={planner.start}
@@ -55,6 +56,8 @@ export function Planner() {
           onMoveWaypoint={planner.moveWaypoint}
           onRemoveWaypoint={planner.removeWaypoint}
           onMoveStart={planner.setStart}
+          onHeatmapLoadingChange={planner.setHeatmapLoading}
+          onHeatmapError={planner.setHeatmapError}
           cursorDistanceM={planner.cursorDistanceM}
         />
         <BikeabilityLegend

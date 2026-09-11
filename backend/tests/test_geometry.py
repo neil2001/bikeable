@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import networkx as nx
 from app.graph.fixture import build_tiny_graph
-from app.graph.geometry import edge_to_wgs84_coordinates
+from app.graph.geometry import edge_to_overlay_coordinates, edge_to_wgs84_coordinates
 from app.routing.metrics import path_to_coordinates
 from shapely.geometry import LineString
 
@@ -48,6 +48,28 @@ def test_curved_geometry_unprojection() -> None:
     # Last point should match node 2 approx WGS84
     assert abs(coords[-1][0] - (-123.1150)) < 0.001
     assert abs(coords[-1][1] - 49.2850) < 0.001
+
+
+def test_overlay_coordinates_simplify_and_round() -> None:
+    graph = nx.MultiDiGraph()
+    graph.graph["crs"] = "EPSG:32610"
+    graph.add_node(1, lat=49.2827, lon=-123.1207, x=491217.0, y=5458872.0)
+    graph.add_node(2, lat=49.2850, lon=-123.1150, x=491632.0, y=5459128.0)
+    dense = LineString(
+        [(491217.0 + offset, 5458872.0 + offset * 0.6) for offset in range(0, 420, 2)]
+        + [(491632.0, 5459128.0)]
+    )
+    edge_data = {"geometry": dense, "length_m": 500.0}
+    graph.add_edge(1, 2, key=0, **edge_data)
+
+    raw = edge_to_wgs84_coordinates(graph, 1, 2, edge_data)
+    overlay = edge_to_overlay_coordinates(graph, 1, 2, edge_data)
+
+    assert len(overlay) < len(raw)
+    assert len(overlay) >= 2
+    for lon, lat in overlay:
+        assert lon == round(lon, 5)
+        assert lat == round(lat, 5)
 
 
 def test_path_to_coordinates_chains_curved_segments() -> None:
