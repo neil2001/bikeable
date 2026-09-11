@@ -5,26 +5,33 @@ export const ACCENT = "#2f6b4f";
 export const ROUTE_COLOR = "#2563eb";
 export const ROUTE_CASING = "#ffffff";
 
-/** Sequential bikeability stops (0, 5, 8, 10) shared by map layer and legend. */
+/**
+ * Sequential bikeability stops shared by map layer and legend:
+ * - 0–4 Poor: neutral slate grey that recedes into the basemap
+ * - 5.5–7.2 Moderate: vibrant warm amber/yellow for typical streets
+ * - 8.5 Good: fresh cycling green for dedicated bike routes
+ * - 10 Excellent: vibrant teal for protected facilities
+ */
 export const BIKEABILITY_STOPS: { score: number; color: string }[] = [
-  { score: 0, color: "#c9c4b8" },
-  { score: 5, color: "#7d9460" },
-  { score: 8, color: "#2f6b4f" },
-  { score: 10, color: "#1b9e77" },
+  { score: 0, color: "#94a3b8" },
+  { score: 4.0, color: "#94a3b8" },
+  { score: 5.5, color: "#f59e0b" },
+  { score: 7.2, color: "#f59e0b" },
+  { score: 8.5, color: "#16a34a" },
+  { score: 10, color: "#0d9488" },
 ];
 
 export function bikeabilityColor(score: number): string {
-  if (score >= 10) return BIKEABILITY_STOPS[3].color;
-  if (score >= 8) {
-    const t = (score - 8) / 2;
-    return lerpColor(BIKEABILITY_STOPS[2].color, BIKEABILITY_STOPS[3].color, t);
+  if (score <= BIKEABILITY_STOPS[0].score) return BIKEABILITY_STOPS[0].color;
+  for (let i = 1; i < BIKEABILITY_STOPS.length; i++) {
+    const prev = BIKEABILITY_STOPS[i - 1];
+    const curr = BIKEABILITY_STOPS[i];
+    if (score <= curr.score) {
+      const t = (score - prev.score) / (curr.score - prev.score);
+      return lerpColor(prev.color, curr.color, t);
+    }
   }
-  if (score >= 5) {
-    const t = (score - 5) / 3;
-    return lerpColor(BIKEABILITY_STOPS[1].color, BIKEABILITY_STOPS[2].color, t);
-  }
-  const t = score / 5;
-  return lerpColor(BIKEABILITY_STOPS[0].color, BIKEABILITY_STOPS[1].color, t);
+  return BIKEABILITY_STOPS[BIKEABILITY_STOPS.length - 1].color;
 }
 
 export function bikeabilityLegendGradient(): string {

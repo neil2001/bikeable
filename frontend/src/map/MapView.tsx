@@ -46,41 +46,76 @@ function heatmapColorExpression(): maplibregl.ExpressionSpecification {
 }
 
 function heatmapOpacityExpression(opacity: number): maplibregl.ExpressionSpecification {
-  return [
-    "*",
-    ["interpolate", ["linear"], ["get", "bikeability"], 0, 0.35, 5, 0.55, 8, 0.95, 10, 1],
-    opacity,
-  ];
-}
-
-function heatmapWidthExpression(): maplibregl.ExpressionSpecification {
-  const byScore = (low: number, high: number): maplibregl.ExpressionSpecification => [
+  const byScore = (poor: number, mid: number, good: number, top: number): maplibregl.ExpressionSpecification => [
     "interpolate",
     ["linear"],
     ["get", "bikeability"],
     0,
-    low * 0.5,
-    5,
-    low * 0.75,
-    8,
-    high,
+    poor * opacity,
+    4.0,
+    poor * opacity,
+    6.5,
+    mid * opacity,
+    8.5,
+    good * opacity,
     10,
-    high * 1.3,
+    top * opacity,
   ];
 
-  // Zoom must be the top-level interpolate input; nest score scaling inside each stop.
   return [
     "interpolate",
     ["linear"],
     ["zoom"],
-    9,
-    byScore(1.6, 2.8),
-    11,
-    byScore(2.4, 4.2),
-    13,
-    byScore(3.6, 6.2),
+    8,
+    byScore(0.02, 0.10, 0.40, 0.60),
+    10,
+    byScore(0.05, 0.18, 0.55, 0.75),
+    12,
+    byScore(0.10, 0.30, 0.68, 0.86),
+    14,
+    byScore(0.18, 0.45, 0.80, 0.94),
     16,
-    byScore(5.5, 9.5),
+    byScore(0.32, 0.62, 0.90, 1.0),
+    18,
+    byScore(0.48, 0.78, 0.96, 1.0),
+  ];
+}
+
+function heatmapWidthExpression(): maplibregl.ExpressionSpecification {
+  const byScore = (poor: number, mid: number, good: number, top: number): maplibregl.ExpressionSpecification => [
+    "interpolate",
+    ["linear"],
+    ["get", "bikeability"],
+    0,
+    poor,
+    4.0,
+    poor,
+    6.5,
+    mid,
+    8.5,
+    good,
+    10,
+    top,
+  ];
+
+  // Ultra-fine hairlines when zoomed out to prevent dense urban meshes from turning into solid blobs,
+  // gradually expanding into street corridors when zoomed into neighborhood/street level.
+  return [
+    "interpolate",
+    ["linear"],
+    ["zoom"],
+    8,
+    byScore(0.05, 0.10, 0.22, 0.35),
+    10,
+    byScore(0.10, 0.18, 0.35, 0.55),
+    12,
+    byScore(0.20, 0.32, 0.60, 0.90),
+    14,
+    byScore(0.40, 0.65, 1.15, 1.60),
+    16,
+    byScore(0.85, 1.35, 2.10, 2.80),
+    18,
+    byScore(1.40, 2.20, 3.40, 4.40),
   ];
 }
 
@@ -167,7 +202,7 @@ export function MapView({
       zoom: 13,
     });
 
-    map.addControl(new maplibregl.NavigationControl({ showCompass: true }), "top-right");
+    map.addControl(new maplibregl.NavigationControl({ showCompass: true }), "bottom-right");
 
     const recordPointerDown = (event: { point: { x: number; y: number } }) => {
       pointerDownRef.current = { x: event.point.x, y: event.point.y };
@@ -195,7 +230,7 @@ export function MapView({
         type: "line",
         source: "bikeability",
         layout: {
-          "line-cap": "round",
+          "line-cap": "butt",
           "line-join": "round",
           visibility: "visible",
         },
@@ -266,6 +301,7 @@ export function MapView({
     });
 
     mapRef.current = map;
+    (window as unknown as { __map?: maplibregl.Map }).__map = map;
 
     return () => {
       markersRef.current.forEach((marker) => marker.remove());
@@ -328,6 +364,8 @@ export function MapView({
     }
     map.setLayoutProperty(ROAD_LAYER, "visibility", showHeatmap ? "visible" : "none");
     map.setPaintProperty(ROAD_LAYER, "line-opacity", heatmapOpacityExpression(heatmapOpacity));
+    map.setPaintProperty(ROAD_LAYER, "line-color", heatmapColorExpression());
+    map.setPaintProperty(ROAD_LAYER, "line-width", heatmapWidthExpression());
   }, [showHeatmap, heatmapOpacity, mapReady]);
 
   useEffect(() => {
