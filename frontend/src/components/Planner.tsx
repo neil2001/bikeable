@@ -6,7 +6,7 @@ import { MapView } from "../map/MapView";
 import { BikeabilityLegend } from "./BikeabilityLegend";
 import { RoadInspector } from "./RoadInspector";
 import { RouteCharts } from "./RouteCharts";
-import { RouteControls } from "./RouteControls";
+import { RouteControls, type PanelTab } from "./RouteControls";
 import { RouteSummary } from "./RouteSummary";
 
 const DEFAULT_CENTER = { lat: 49.2827, lon: -123.1207 };
@@ -15,7 +15,10 @@ export function Planner() {
   const planner = usePlanner();
   const [showHeatmap, setShowHeatmap] = useState(true);
   const [heatmapOpacity, setHeatmapOpacity] = useState(0.85);
+  const [bikeabilityMin, setBikeabilityMin] = useState(0);
+  const [bikeabilityMax, setBikeabilityMax] = useState(10);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [panelTab, setPanelTab] = useState<PanelTab>("plan");
 
   const mapCenter = planner.start ?? planner.waypoints[0] ?? DEFAULT_CENTER;
   const routeCoordinates = useMemo(() => {
@@ -45,6 +48,8 @@ export function Planner() {
           mode={planner.mode}
           showHeatmap={showHeatmap}
           heatmapOpacity={heatmapOpacity}
+          bikeabilityMin={bikeabilityMin}
+          bikeabilityMax={bikeabilityMax}
           onMapClick={planner.addWaypoint}
           onRoadClick={planner.inspectRoadAt}
           onMoveWaypoint={planner.moveWaypoint}
@@ -55,8 +60,10 @@ export function Planner() {
         <BikeabilityLegend
           showHeatmap={showHeatmap}
           onToggleHeatmap={() => setShowHeatmap((prev) => !prev)}
-          opacity={heatmapOpacity}
-          onOpacityChange={setHeatmapOpacity}
+          bikeabilityMin={bikeabilityMin}
+          bikeabilityMax={bikeabilityMax}
+          onBikeabilityMinChange={setBikeabilityMin}
+          onBikeabilityMaxChange={setBikeabilityMax}
         />
       </div>
 
@@ -97,12 +104,16 @@ export function Planner() {
         {planner.error ? <div className="error-banner">{planner.error}</div> : null}
 
         <RouteControls
+          tab={panelTab}
+          onTabChange={setPanelTab}
           mode={planner.mode}
           setMode={planner.setMode}
           profile={planner.profile}
           setProfile={planner.setProfile}
           bikeabilityWeight={planner.bikeabilityWeight}
           setBikeabilityWeight={planner.setBikeabilityWeight}
+          heatmapOpacity={heatmapOpacity}
+          setHeatmapOpacity={setHeatmapOpacity}
           targetDistanceMi={planner.targetDistanceMi}
           setTargetDistanceMi={planner.setTargetDistanceMi}
           cityId={planner.cityId}

@@ -1,8 +1,8 @@
 import * as maplibregl from "maplibre-gl";
-import type { LngLatBoundsLike, LngLatLike, Map, MapMouseEvent } from "maplibre-gl";
-import { useEffect, useRef } from "react";
+import type { FilterSpecification, LngLatBoundsLike, LngLatLike, Map, MapMouseEvent } from "maplibre-gl";
+import { useEffect, useRef, useState } from "react";
 import type { BikeabilityFeature, Coordinate } from "../types/api";
-import { ACCENT, bikeabilityColor } from "./colors";
+import { BIKEABILITY_STOPS, ROUTE_CASING, ROUTE_COLOR } from "./colors";
 import { createLucideX } from "./icons";
 import { OSM_STANDARD_STYLE } from "./styles";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -17,6 +17,8 @@ type Props = {
   mode?: "manual" | "auto";
   showHeatmap?: boolean;
   heatmapOpacity?: number;
+  bikeabilityMin?: number;
+  bikeabilityMax?: number;
   onMapClick: (coordinate: Coordinate) => void;
   onRoadClick: (roadId: string) => void;
   onMoveWaypoint?: (index: number, coordinate: Coordinate) => void;
@@ -29,6 +31,61 @@ const ROAD_LAYER = "bikeability-roads";
 const ROUTE_CASING_LAYER = "route-casing";
 const ROUTE_LINE_LAYER = "route-line";
 const CLICK_SLOP_PX = 6;
+
+function heatmapColorExpression(): maplibregl.ExpressionSpecification {
+  const stops: maplibregl.ExpressionSpecification = ["interpolate", ["linear"], ["get", "bikeability"]];
+  for (const { score, color } of BIKEABILITY_STOPS) {
+    stops.push(score, color);
+  }
+  return stops;
+}
+
+function heatmapOpacityExpression(opacity: number): maplibregl.ExpressionSpecification {
+  return [
+    "*",
+    ["interpolate", ["linear"], ["get", "bikeability"], 0, 0.35, 5, 0.55, 8, 0.95, 10, 1],
+    opacity,
+  ];
+}
+
+function heatmapWidthExpression(): maplibregl.ExpressionSpecification {
+  const byScore = (low: number, high: number): maplibregl.ExpressionSpecification => [
+    "interpolate",
+    ["linear"],
+    ["get", "bikeability"],
+    0,
+    low * 0.5,
+    5,
+    low * 0.75,
+    8,
+    high,
+    10,
+    high * 1.3,
+  ];
+
+  // Zoom must be the top-level interpolate input; nest score scaling inside each stop.
+  return [
+    "interpolate",
+    ["linear"],
+    ["zoom"],
+    9,
+    byScore(1.6, 2.8),
+    11,
+    byScore(2.4, 4.2),
+    13,
+    byScore(3.6, 6.2),
+    16,
+    byScore(5.5, 9.5),
+  ];
+}
+
+function bikeabilityFilter(min: number, max: number): FilterSpecification {
+  return [
+    "all",
+    [">=", ["get", "bikeability"], min],
+    ["<=", ["get", "bikeability"], max],
+  ];
+}
 
 function createWaypointElement(label: string, title: string, isStart: boolean) {
   const container = document.createElement("div");
@@ -59,6 +116,8 @@ export function MapView({
   mode = "manual",
   showHeatmap = true,
   heatmapOpacity = 0.8,
+  bikeabilityMin = 0,
+  bikeabilityMax = 10,
   onMapClick,
   onRoadClick,
   onMoveWaypoint,
@@ -68,6 +127,7 @@ export function MapView({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<Map | null>(null);
   const readyRef = useRef(false);
+  const [mapReady, setMapReady] = useState(false);
   const pendingHeatmapRef = useRef(heatmapFeatures);
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const lastFitRouteKeyRef = useRef<string>("");
@@ -115,6 +175,7 @@ export function MapView({
 
     map.on("load", () => {
       readyRef.current = true;
+      setMapReady(true);
 
       map.addSource("bikeability", {
         type: "geojson",
@@ -131,19 +192,9 @@ export function MapView({
           visibility: "visible",
         },
         paint: {
-          "line-color": [
-            "interpolate",
-            ["linear"],
-            ["get", "bikeability"],
-            0,
-            bikeabilityColor(0),
-            5,
-            bikeabilityColor(5),
-            10,
-            bikeabilityColor(10),
-          ],
-          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1.2, 13, 2.8, 16, 5.5],
-          "line-opacity": 0.85,
+          "line-color": heatmapColorExpression(),
+          "line-width": heatmapWidthExpression(),
+          "line-opacity": heatmapOpacityExpression(heatmapOpacity),
         },
       });
 
@@ -158,7 +209,7 @@ export function MapView({
         source: "route",
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
-          "line-color": "#ffffff",
+          "line-color": ROUTE_CASING,
           "line-width": ["interpolate", ["linear"], ["zoom"], 10, 4.5, 13, 7, 16, 10],
           "line-opacity": 0.95,
         },
@@ -170,7 +221,7 @@ export function MapView({
         source: "route",
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
-          "line-color": ACCENT,
+          "line-color": ROUTE_COLOR,
           "line-width": ["interpolate", ["linear"], ["zoom"], 10, 2.5, 13, 4.8, 16, 7.5],
           "line-opacity": 1.0,
         },
@@ -180,13 +231,6 @@ export function MapView({
       bikeabilitySource.setData({
         type: "FeatureCollection",
         features: pendingHeatmapRef.current,
-      });
-
-      map.on("mouseenter", ROAD_LAYER, () => {
-        map.getCanvas().style.cursor = "pointer";
-      });
-      map.on("mouseleave", ROAD_LAYER, () => {
-        map.getCanvas().style.cursor = "";
       });
     });
 
@@ -214,7 +258,6 @@ export function MapView({
         const roadId = roadHits[0]?.properties?.roadId;
         if (typeof roadId === "string") {
           onRoadClickRef.current(roadId);
-          return;
         }
       }
       onMapClickRef.current({ lat: event.lngLat.lat, lon: event.lngLat.lng });
@@ -228,6 +271,7 @@ export function MapView({
       map.remove();
       mapRef.current = null;
       readyRef.current = false;
+      setMapReady(false);
     };
     // Initial camera only; later pans come from fitBounds / user drag.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -240,7 +284,7 @@ export function MapView({
     }
     const source = map.getSource("bikeability") as maplibregl.GeoJSONSource | undefined;
     source?.setData({ type: "FeatureCollection", features: heatmapFeatures });
-  }, [heatmapFeatures]);
+  }, [heatmapFeatures, mapReady]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -248,8 +292,16 @@ export function MapView({
       return;
     }
     map.setLayoutProperty(ROAD_LAYER, "visibility", showHeatmap ? "visible" : "none");
-    map.setPaintProperty(ROAD_LAYER, "line-opacity", heatmapOpacity);
-  }, [showHeatmap, heatmapOpacity]);
+    map.setPaintProperty(ROAD_LAYER, "line-opacity", heatmapOpacityExpression(heatmapOpacity));
+  }, [showHeatmap, heatmapOpacity, mapReady]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !readyRef.current || !map.getLayer(ROAD_LAYER)) {
+      return;
+    }
+    map.setFilter(ROAD_LAYER, bikeabilityFilter(bikeabilityMin, bikeabilityMax));
+  }, [bikeabilityMin, bikeabilityMax, mapReady]);
 
   useEffect(() => {
     const map = mapRef.current;
