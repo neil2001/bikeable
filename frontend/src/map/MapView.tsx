@@ -6,7 +6,7 @@ import { ApiClientError } from "../api/errors";
 import type { Coordinate, CyclingProfile } from "../types/api";
 import { BIKEABILITY_STOPS, ROUTE_CASING, ROUTE_COLOR } from "./colors";
 import { createLucideX } from "./icons";
-import { OSM_STANDARD_STYLE } from "./styles";
+import { OPENFREEMAP_POSITRON_STYLE } from "./styles";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 type Props = {
@@ -201,7 +201,7 @@ export function MapView({
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: OSM_STANDARD_STYLE,
+      style: OPENFREEMAP_POSITRON_STYLE,
       center: [center.lon, center.lat],
       zoom: 13,
     });
@@ -500,7 +500,6 @@ export function MapView({
         const stopAndRemove = (event: Event) => {
           event.preventDefault();
           event.stopPropagation();
-          suppressFollowingClick();
           onRemoveWaypoint(index);
         };
         removeBtn.addEventListener("click", stopAndRemove);
