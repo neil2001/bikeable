@@ -11,6 +11,7 @@ EXPECTED_PATHS = {
     "/api/v1/roads/{roadId}",
     "/api/v1/routes/segment",
     "/api/v1/routes/manual",
+    "/api/v1/routes/from-roads",
     "/api/v1/routes/loop",
     "/api/v1/routes/{routeId}",
     "/api/v1/routes/{routeId}/gpx",

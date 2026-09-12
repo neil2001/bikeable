@@ -1,8 +1,8 @@
-import { Download, LoaderCircle, LocateFixed, Map as MapIcon, Route, Settings } from "lucide-react";
+import { Download, LoaderCircle, LocateFixed, Map as MapIcon, PenLine, Route, Settings } from "lucide-react";
 import type { PlannerMode } from "../hooks/usePlanner";
 import type { CitySummary, CyclingProfile } from "../types/api";
 
-export type PanelTab = "plan" | "generate" | "settings";
+export type PanelTab = "plan" | "trace" | "generate" | "settings";
 
 type Props = {
   tab: PanelTab;
@@ -24,7 +24,10 @@ type Props = {
   onGenerate: () => void;
   onLocate: () => void;
   onExport: () => void;
+  onUndoTrace: () => void;
+  onClearTrace: () => void;
   hasRoute: boolean;
+  hasTraceSelection: boolean;
 };
 
 export function RouteControls({
@@ -47,7 +50,10 @@ export function RouteControls({
   onGenerate,
   onLocate,
   onExport,
+  onUndoTrace,
+  onClearTrace,
   hasRoute,
+  hasTraceSelection,
 }: Props) {
   return (
     <section className="controls">
@@ -62,6 +68,17 @@ export function RouteControls({
         >
           <MapIcon size={16} strokeWidth={1.75} />
           Plan
+        </button>
+        <button
+          type="button"
+          className={tab === "trace" ? "active" : ""}
+          onClick={() => {
+            setMode("trace");
+            onTabChange("trace");
+          }}
+        >
+          <PenLine size={16} strokeWidth={1.75} />
+          Trace
         </button>
         <button
           type="button"
@@ -159,14 +176,38 @@ export function RouteControls({
                 )}
               </button>
             </>
+          ) : mode === "trace" ? (
+            <>
+              <p className="hint">Tap connected roads to build a path.</p>
+              <div className="btn-row">
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={onUndoTrace}
+                  disabled={!hasTraceSelection}
+                >
+                  Undo last
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={onClearTrace}
+                  disabled={!hasTraceSelection}
+                >
+                  Clear
+                </button>
+              </div>
+            </>
           ) : (
             <p className="hint">Click the map to add numbered waypoints.</p>
           )}
           <div className="btn-row">
-            <button type="button" className="secondary" onClick={onLocate}>
-              <LocateFixed size={16} strokeWidth={1.75} />
-              Use my location
-            </button>
+            {mode !== "trace" ? (
+              <button type="button" className="secondary" onClick={onLocate}>
+                <LocateFixed size={16} strokeWidth={1.75} />
+                Use my location
+              </button>
+            ) : null}
             {hasRoute ? (
               <button type="button" className="secondary" onClick={onExport}>
                 <Download size={16} strokeWidth={1.75} />

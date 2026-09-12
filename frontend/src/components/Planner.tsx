@@ -48,6 +48,7 @@ export function Planner() {
           heatmapProfile={planner.profile}
           routeCoordinates={routeCoordinates}
           waypoints={planner.waypoints}
+          selectedRoadIds={planner.selectedRoadIds}
           start={planner.start}
           mode={planner.mode}
           showHeatmap={showHeatmap}
@@ -55,7 +56,7 @@ export function Planner() {
           bikeabilityMin={bikeabilityMin}
           bikeabilityMax={bikeabilityMax}
           onMapClick={planner.addWaypoint}
-          onRoadClick={planner.inspectRoadAt}
+          onRoadClick={planner.handleRoadClick}
           onMoveWaypoint={planner.moveWaypoint}
           onRemoveWaypoint={planner.removeWaypoint}
           onMoveStart={planner.setStart}
@@ -81,7 +82,9 @@ export function Planner() {
         <p className="subtitle">
           {planner.mode === "manual"
             ? "Click to drop a waypoint. Drag the map to pan."
-            : "Click a start, then generate a loop."}
+            : planner.mode === "trace"
+              ? "Tap connected roads to trace a path."
+              : "Click a start, then generate a loop."}
         </p>
       </header>
 
@@ -129,7 +132,10 @@ export function Planner() {
           onGenerate={() => void planner.generateAutoRoute()}
           onLocate={planner.useCurrentLocation}
           onExport={() => void planner.exportRoute()}
+          onUndoTrace={planner.undoTrace}
+          onClearTrace={planner.clearTrace}
           hasRoute={Boolean(planner.route)}
+          hasTraceSelection={planner.selectedRoadIds.length > 0}
         />
 
         <RouteSummary route={planner.route} loading={planner.loading} />

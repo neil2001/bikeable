@@ -30,3 +30,8 @@ class LoopRouteRequest(ApiModel):
     profile: CyclingProfile
     preferences: RoutePreferences
     constraints: RouteConstraints | None = None
+
+
+class FromRoadsRequest(ApiModel):
+    road_ids: list[str] = Field(min_length=1)
+    profile: CyclingProfile

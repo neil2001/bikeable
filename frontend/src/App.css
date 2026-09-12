@@ -167,13 +167,13 @@
   background: transparent;
   color: var(--muted);
   padding: var(--space-2) 0;
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 500;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-1);
+  gap: 0.2rem;
 }
 
 .mode-toggle button.active {

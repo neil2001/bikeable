@@ -5,10 +5,12 @@ import {
   getCities,
   getDefaultCityId,
   inspectRoad,
+  routeFromRoads,
   routeManual,
   routeSegment,
 } from "../api/client";
 import { ApiClientError } from "../api/errors";
+import { applyTraceClick } from "../map/tracePath";
 import type {
   CitySummary,
   Coordinate,
@@ -17,7 +19,7 @@ import type {
   RouteResponse,
 } from "../types/api";
 
-export type PlannerMode = "manual" | "auto";
+export type PlannerMode = "manual" | "auto" | "trace";
 
 const DEBOUNCE_MS = 350;
 
@@ -29,6 +31,7 @@ export function usePlanner() {
   const [bikeabilityWeight, setBikeabilityWeight] = useState(0.8);
   const [targetDistanceMi, setTargetDistanceMi] = useState(30);
   const [waypoints, setWaypoints] = useState<Coordinate[]>([]);
+  const [selectedRoadIds, setSelectedRoadIds] = useState<string[]>([]);
   const [start, setStart] = useState<Coordinate | null>(null);
   const [route, setRoute] = useState<RouteResponse | null>(null);
   const [segmentGeometries, setSegmentGeometries] = useState<[number, number][][]>([]);
@@ -55,6 +58,75 @@ export function usePlanner() {
     setError(message);
   }, []);
 
+  const changeMode = useCallback(
+    (next: PlannerMode) => {
+      if (next === mode) {
+        return;
+      }
+      setMode(next);
+      setSelectedRoadIds([]);
+      setRoute(null);
+      setSegmentGeometries([]);
+      setError(null);
+      setRoadInspection(null);
+      if (next !== "manual") {
+        setWaypoints([]);
+      }
+      if (next !== "auto") {
+        setStart(null);
+      }
+    },
+    [mode],
+  );
+
+  const changeCityId = useCallback((next: string) => {
+    setCityId(next);
+    setSelectedRoadIds([]);
+    setRoute(null);
+    setSegmentGeometries([]);
+    setWaypoints([]);
+    setStart(null);
+    setError(null);
+    setRoadInspection(null);
+  }, []);
+
+  const refreshTraceRoute = useCallback(
+    async (roadIds: string[]) => {
+      if (roadIds.length === 0) {
+        setRoute(null);
+        setSegmentGeometries([]);
+        return;
+      }
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await routeFromRoads({ roadIds, profile }, cityId);
+        setRoute(response);
+        setSegmentGeometries([response.geometry.coordinates]);
+      } catch (cause) {
+        if (cause instanceof ApiClientError) {
+          setError(cause.message);
+        } else {
+          setError("Unable to assemble path.");
+        }
+      } finally {
+        setLoading(false);
+      }
+    },
+    [cityId, profile],
+  );
+
+  const scheduleTraceRoute = useCallback(
+    (roadIds: string[]) => {
+      if (debounceRef.current) {
+        window.clearTimeout(debounceRef.current);
+      }
+      debounceRef.current = window.setTimeout(() => {
+        void refreshTraceRoute(roadIds);
+      }, DEBOUNCE_MS);
+    },
+    [refreshTraceRoute],
+  );
   const refreshManualRoute = useCallback(
     async (points: Coordinate[]) => {
       if (points.length < 2) {
@@ -96,6 +168,9 @@ export function usePlanner() {
 
   const addWaypoint = useCallback(
     (coordinate: Coordinate) => {
+      if (mode === "trace") {
+        return;
+      }
       if (mode === "auto") {
         setStart(coordinate);
         return;
@@ -180,6 +255,41 @@ export function usePlanner() {
     [cityId, profile],
   );
 
+  const handleRoadClick = useCallback(
+    (roadIds: string[]) => {
+      const inspectId = roadIds[0];
+      if (inspectId) {
+        void inspectRoadAt(inspectId);
+      }
+      if (mode !== "trace") {
+        return;
+      }
+      const result = applyTraceClick(selectedRoadIds, roadIds);
+      if (result.type === "error") {
+        setError(result.message);
+        return;
+      }
+      setError(null);
+      setSelectedRoadIds(result.roadIds);
+      scheduleTraceRoute(result.roadIds);
+    },
+    [inspectRoadAt, mode, scheduleTraceRoute, selectedRoadIds],
+  );
+
+  const undoTrace = useCallback(() => {
+    const next = selectedRoadIds.slice(0, -1);
+    setSelectedRoadIds(next);
+    setError(null);
+    scheduleTraceRoute(next);
+  }, [scheduleTraceRoute, selectedRoadIds]);
+
+  const clearTrace = useCallback(() => {
+    setSelectedRoadIds([]);
+    setError(null);
+    setRoadInspection(null);
+    scheduleTraceRoute([]);
+  }, [scheduleTraceRoute]);
+
   const useCurrentLocation = useCallback(() => {
     if (!navigator.geolocation) {
       setError("Geolocation is not available in this browser.");
@@ -215,10 +325,10 @@ export function usePlanner() {
 
   return {
     cityId,
-    setCityId,
+    setCityId: changeCityId,
     cities,
     mode,
-    setMode,
+    setMode: changeMode,
     profile,
     setProfile,
     bikeabilityWeight,
@@ -226,6 +336,7 @@ export function usePlanner() {
     targetDistanceMi,
     setTargetDistanceMi,
     waypoints,
+    selectedRoadIds,
     start,
     setStart,
     route,
@@ -244,6 +355,9 @@ export function usePlanner() {
     removeWaypoint,
     generateAutoRoute,
     inspectRoadAt,
+    handleRoadClick,
+    undoTrace,
+    clearTrace,
     useCurrentLocation,
     exportRoute,
     selectedCity: cities.find((c) => c.cityId === cityId) ?? null,

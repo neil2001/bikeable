@@ -5,6 +5,7 @@ import type {
   HealthResponse,
   LoopRouteRequest,
   ManualRouteRequest,
+  FromRoadsRequest,
   RoadInspectionResponse,
   RouteResponse,
   SegmentRouteRequest,
@@ -84,6 +85,18 @@ export async function routeManual(
   cityId: string = defaultCityId,
 ): Promise<RouteResponse> {
   const response = await fetch(`/api/v1/routes/manual?cityId=${cityId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  return parseApiResponse<RouteResponse>(response);
+}
+
+export async function routeFromRoads(
+  request: FromRoadsRequest,
+  cityId: string = defaultCityId,
+): Promise<RouteResponse> {
+  const response = await fetch(`/api/v1/routes/from-roads?cityId=${cityId}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(request),
