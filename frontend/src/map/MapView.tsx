@@ -7,6 +7,7 @@ import type { Coordinate, CyclingProfile } from "../types/api";
 import { BIKEABILITY_STOPS, ROUTE_CASING, ROUTE_COLOR } from "./colors";
 import { createLucideX } from "./icons";
 import { OPENFREEMAP_POSITRON_STYLE } from "./styles";
+import { highlightRoadIds } from "./tracePath";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 type Props = {
@@ -16,14 +17,15 @@ type Props = {
   heatmapProfile: CyclingProfile;
   routeCoordinates: [number, number][][];
   waypoints: Coordinate[];
+  selectedRoadIds?: string[];
   start?: Coordinate | null;
-  mode?: "manual" | "auto";
+  mode?: "manual" | "auto" | "trace";
   showHeatmap?: boolean;
   heatmapOpacity?: number;
   bikeabilityMin?: number;
   bikeabilityMax?: number;
   onMapClick: (coordinate: Coordinate) => void;
-  onRoadClick: (roadId: string) => void;
+  onRoadClick: (roadIds: string[]) => void;
   onMoveWaypoint?: (index: number, coordinate: Coordinate) => void;
   onRemoveWaypoint?: (index: number) => void;
   onMoveStart?: (coordinate: Coordinate) => void;
@@ -33,6 +35,7 @@ type Props = {
 };
 
 const ROAD_LAYER = "bikeability-roads";
+const TRACE_LAYER = "traced-roads";
 const ROUTE_CASING_LAYER = "route-casing";
 const ROUTE_LINE_LAYER = "route-line";
 const CLICK_SLOP_PX = 6;
@@ -157,6 +160,7 @@ export function MapView({
   heatmapProfile,
   routeCoordinates,
   waypoints,
+  selectedRoadIds = [],
   start,
   mode = "manual",
   showHeatmap = true,
@@ -184,12 +188,14 @@ export function MapView({
 
   const onRoadClickRef = useRef(onRoadClick);
   const onMapClickRef = useRef(onMapClick);
+  const modeRef = useRef(mode);
   const onHeatmapLoadingChangeRef = useRef(onHeatmapLoadingChange);
   const onHeatmapErrorRef = useRef(onHeatmapError);
 
   useEffect(() => {
     onRoadClickRef.current = onRoadClick;
     onMapClickRef.current = onMapClick;
+    modeRef.current = mode;
     onHeatmapLoadingChangeRef.current = onHeatmapLoadingChange;
     onHeatmapErrorRef.current = onHeatmapError;
   });
@@ -245,6 +251,23 @@ export function MapView({
         },
       });
 
+      map.addLayer({
+        id: TRACE_LAYER,
+        type: "line",
+        source: "bikeability",
+        layout: {
+          "line-cap": "round",
+          "line-join": "round",
+          visibility: "none",
+        },
+        paint: {
+          "line-color": ROUTE_COLOR,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 3.5, 13, 6, 16, 9],
+          "line-opacity": 0.9,
+        },
+        filter: ["==", ["get", "roadId"], "__none__"],
+      });
+
       map.addSource("route", {
         type: "geojson",
         data: { type: "FeatureCollection", features: [] },
@@ -296,12 +319,33 @@ export function MapView({
       }
       if (map.getLayer(ROAD_LAYER)) {
         const roadHits = map.queryRenderedFeatures(event.point, { layers: [ROAD_LAYER] });
-        const roadId = roadHits[0]?.properties?.roadId;
-        if (typeof roadId === "string") {
-          onRoadClickRef.current(roadId);
+        const roadIds = [
+          ...new Set(
+            roadHits
+              .map((feature) => feature.properties?.roadId)
+              .filter((roadId): roadId is string => typeof roadId === "string"),
+          ),
+        ];
+        if (roadIds.length > 0) {
+          onRoadClickRef.current(roadIds);
+          if (modeRef.current === "trace") {
+            return;
+          }
         }
       }
+      if (modeRef.current === "trace") {
+        return;
+      }
       onMapClickRef.current({ lat: event.lngLat.lat, lon: event.lngLat.lng });
+    });
+
+    map.on("mouseenter", ROAD_LAYER, () => {
+      if (modeRef.current === "trace") {
+        map.getCanvas().style.cursor = "pointer";
+      }
+    });
+    map.on("mouseleave", ROAD_LAYER, () => {
+      map.getCanvas().style.cursor = "";
     });
 
     mapRef.current = map;
@@ -379,6 +423,21 @@ export function MapView({
     }
     map.setFilter(ROAD_LAYER, bikeabilityFilter(bikeabilityMin, bikeabilityMax));
   }, [bikeabilityMin, bikeabilityMax, mapReady]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !readyRef.current || !map.getLayer(TRACE_LAYER)) {
+      return;
+    }
+    const ids = highlightRoadIds(selectedRoadIds);
+    if (ids.length === 0) {
+      map.setLayoutProperty(TRACE_LAYER, "visibility", "none");
+      map.setFilter(TRACE_LAYER, ["==", ["get", "roadId"], "__none__"]);
+      return;
+    }
+    map.setLayoutProperty(TRACE_LAYER, "visibility", "visible");
+    map.setFilter(TRACE_LAYER, ["in", ["get", "roadId"], ["literal", ids]]);
+  }, [selectedRoadIds, mapReady]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -460,6 +519,10 @@ export function MapView({
     const suppressFollowingClick = () => {
       suppressClickRef.current = true;
     };
+
+    if (mode === "trace") {
+      return;
+    }
 
     if (mode === "auto" && start) {
       const { container } = createWaypointElement("S", "Start location (drag to reposition)", true);

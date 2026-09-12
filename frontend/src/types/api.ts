@@ -88,6 +88,11 @@ export type LoopRouteRequest = {
   constraints?: RouteConstraints;
 };
 
+export type FromRoadsRequest = {
+  roadIds: string[];
+  profile: CyclingProfile;
+};
+
 export type HealthResponse = {
   status: string;
 };
