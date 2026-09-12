@@ -1,7 +1,9 @@
 import uuid
 
+import networkx as nx
 from app.elevation.provider import sample_path_elevations
 from app.models.requests import (
+    FromRoadsRequest,
     LoopRouteRequest,
     ManualRouteRequest,
     SegmentRouteRequest,
@@ -13,6 +15,7 @@ from app.models.responses import (
     SegmentRouteResponse,
 )
 from app.optimization.loop import generate_loop
+from app.routing.ids import parse_road_id
 from app.routing.metrics import (
     RouteMetrics,
     build_line_string,
@@ -67,6 +70,47 @@ def route_manual(
     )
     save_route(response)
     return response
+
+
+def route_from_roads(
+    request: FromRoadsRequest, city_id: str = "fixture"
+) -> RouteResponse:
+    _graph, bike_graph = get_scored_graph(city_id, request.profile.value)
+    path = _path_from_road_ids(bike_graph, request.road_ids)
+    metrics = _metrics_with_elevation(bike_graph, path)
+    response = _metrics_to_route_response(
+        route_id=f"rt_{uuid.uuid4().hex[:12]}",
+        geometry=build_line_string(bike_graph, path),
+        metrics=metrics,
+    )
+    save_route(response)
+    return response
+
+
+def _path_from_road_ids(graph: nx.MultiDiGraph, road_ids: list[str]) -> list[int]:
+    path: list[int] = []
+    for index, road_id in enumerate(road_ids):
+        try:
+            source, target, key = parse_road_id(road_id)
+        except ValueError as exc:
+            raise RoutingError("INVALID_REQUEST", str(exc)) from exc
+
+        if not graph.has_edge(source, target, key):
+            if not graph.has_edge(source, target):
+                raise RoutingError(
+                    "INVALID_REQUEST",
+                    f"Road '{road_id}' was not found.",
+                )
+        if index == 0:
+            path.extend([source, target])
+            continue
+        if source != path[-1]:
+            raise RoutingError(
+                "INVALID_REQUEST",
+                "Selected roads do not form a connected path.",
+            )
+        path.append(target)
+    return path
 
 
 def route_loop(request: LoopRouteRequest, city_id: str = "fixture") -> RouteResponse:
@@ -129,4 +173,10 @@ def _metrics_to_route_response(
     )
 
 
-__all__ = ["RoutingError", "route_loop", "route_manual", "route_segment"]
+__all__ = [
+    "RoutingError",
+    "route_from_roads",
+    "route_loop",
+    "route_manual",
+    "route_segment",
+]

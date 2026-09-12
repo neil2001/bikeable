@@ -5,6 +5,7 @@ from app.api.errors import ApiError
 from app.export.gpx import route_to_gpx
 from app.models.common import ApiErrorCode
 from app.models.requests import (
+    FromRoadsRequest,
     LoopRouteRequest,
     ManualRouteRequest,
     SegmentRouteRequest,
@@ -13,7 +14,12 @@ from app.models.responses import RouteResponse, SegmentRouteResponse
 from app.routing.point_to_point import RoutingError
 from app.services.city_registry import resolve_city_id
 from app.services.route_store import get_route
-from app.services.routing import route_loop, route_manual, route_segment
+from app.services.routing import (
+    route_from_roads,
+    route_loop,
+    route_manual,
+    route_segment,
+)
 
 router = APIRouter()
 
@@ -49,6 +55,17 @@ def route_manual_endpoint(
 ) -> RouteResponse:
     try:
         return route_manual(body, resolve_city_id(cityId))
+    except RoutingError as exc:
+        raise _routing_error(exc) from exc
+
+
+@router.post("/routes/from-roads", response_model=RouteResponse)
+def route_from_roads_endpoint(
+    body: FromRoadsRequest,
+    cityId: str = Query(default="fixture"),
+) -> RouteResponse:
+    try:
+        return route_from_roads(body, resolve_city_id(cityId))
     except RoutingError as exc:
         raise _routing_error(exc) from exc
 
