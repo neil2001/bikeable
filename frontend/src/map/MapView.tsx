@@ -39,6 +39,14 @@ const TRACE_LAYER = "traced-roads";
 const ROUTE_CASING_LAYER = "route-casing";
 const ROUTE_LINE_LAYER = "route-line";
 const CLICK_SLOP_PX = 6;
+const ROAD_HIT_PAD_PX = 12;
+
+function roadHitBox(point: { x: number; y: number }): [maplibregl.PointLike, maplibregl.PointLike] {
+  return [
+    [point.x - ROAD_HIT_PAD_PX, point.y - ROAD_HIT_PAD_PX],
+    [point.x + ROAD_HIT_PAD_PX, point.y + ROAD_HIT_PAD_PX],
+  ];
+}
 
 function heatmapColorExpression(): maplibregl.ExpressionSpecification {
   const stops: maplibregl.ExpressionSpecification = ["interpolate", ["linear"], ["get", "bikeability"]];
@@ -318,7 +326,8 @@ export function MapView({
         return;
       }
       if (map.getLayer(ROAD_LAYER)) {
-        const roadHits = map.queryRenderedFeatures(event.point, { layers: [ROAD_LAYER] });
+        const layers = map.getLayer(TRACE_LAYER) ? [TRACE_LAYER, ROAD_LAYER] : [ROAD_LAYER];
+        const roadHits = map.queryRenderedFeatures(roadHitBox(event.point), { layers });
         const roadIds = [
           ...new Set(
             roadHits
