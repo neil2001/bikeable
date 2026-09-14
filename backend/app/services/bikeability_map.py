@@ -3,7 +3,7 @@ from typing import Any
 import networkx as nx
 from app.features.apply import read_features_from_edge
 from app.graph.geometry import edge_to_overlay_coordinates
-from app.routing.ids import make_road_id
+from app.routing.ids import json_osmid, make_road_id
 
 OverlayGeoJSON = dict[str, Any]
 
@@ -94,19 +94,24 @@ def graph_to_bikeability_geojson(
         if len(coordinates) < 2:
             continue
 
-        features.append(
-            {
-                "type": "Feature",
-                "properties": {
-                    "roadId": make_road_id(chosen_source, chosen_target, chosen_key),
-                    "bikeability": round(float(chosen_data.get("bikeability", 0.0)), 2),
-                },
-                "geometry": {
-                    "type": "LineString",
-                    "coordinates": coordinates,
-                },
+        osmid = json_osmid(chosen_data.get("osmid"))
+        properties = {
+            "roadId": make_road_id(chosen_source, chosen_target, chosen_key),
+            "bikeability": round(float(chosen_data.get("bikeability", 0.0)), 2),
+        }
+        if osmid is not None:
+            properties["osmid"] = osmid
+        feature: dict[str, Any] = {
+            "type": "Feature",
+            "properties": properties,
+            "geometry": {
+                "type": "LineString",
+                "coordinates": coordinates,
             },
-        )
+        }
+        if isinstance(osmid, int):
+            feature["id"] = osmid
+        features.append(feature)
 
     return {
         "type": "FeatureCollection",

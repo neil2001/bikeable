@@ -1,6 +1,8 @@
 from app.models.common import RoutePreferences
 from app.scoring.config import RoutingCostParams, cached_scoring_config
 
+WALK_LINK_FACTOR = 8.0
+
 
 def edge_routing_cost(
     length_m: float,
@@ -8,15 +10,19 @@ def edge_routing_cost(
     preferences: RoutePreferences,
     *,
     routing: RoutingCostParams | None = None,
+    walk_link: bool = False,
 ) -> float:
     params = routing or cached_scoring_config().routing
     discomfort = 1.0 - bikeability / 10.0
     penalty = discomfort**params.gamma
     if bikeability < params.avoid_score:
         penalty *= params.avoid_factor
-    return length_m * (
+    cost = length_m * (
         preferences.distance_weight + preferences.bikeability_weight * penalty
     )
+    if walk_link:
+        cost *= WALK_LINK_FACTOR
+    return cost
 
 
 def apply_routing_costs(graph, preferences: RoutePreferences) -> None:
@@ -29,4 +35,5 @@ def apply_routing_costs(graph, preferences: RoutePreferences) -> None:
             bikeability,
             preferences,
             routing=routing,
+            walk_link=bool(edge_data.get("walk_link")),
         )

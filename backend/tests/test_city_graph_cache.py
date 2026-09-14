@@ -1,6 +1,8 @@
 from app.services.city_graph import (
+    OVERLAY_FORMAT_VERSION,
     _bike_graph_cache,
     _scored_graph_cache,
+    bikeability_etag,
     get_bikeability_overlay_path,
     get_scored_graph,
     get_scored_graph_for_bikeability,
@@ -11,6 +13,38 @@ from app.services.city_graph import (
 
 def setup_function() -> None:
     reset_city_graph_caches()
+
+
+def test_bikeability_etag_includes_overlay_format_version() -> None:
+    etag = bikeability_etag("fixture", "road")
+    assert OVERLAY_FORMAT_VERSION in etag
+
+
+def test_bikeability_etag_changes_when_processed_graph_is_rebuilt(
+    tmp_path, monkeypatch
+) -> None:
+    from app.config import settings
+    from app.graph.store import save_processed_graph
+    from app.graph.fixture import build_tiny_graph
+
+    monkeypatch.setattr(settings, "data_root", tmp_path)
+    graph = build_tiny_graph()
+    save_processed_graph(
+        graph,
+        processed_root=settings.processed_data_dir,
+        city_id="vancouver",
+        source="test",
+    )
+    first = bikeability_etag("vancouver", "road")
+    graph.add_node(99, lat=49.28, lon=-123.12, x=0.0, y=0.0)
+    save_processed_graph(
+        graph,
+        processed_root=settings.processed_data_dir,
+        city_id="vancouver",
+        source="test",
+    )
+    second = bikeability_etag("vancouver", "road")
+    assert first != second
 
 
 def test_overlay_path_does_not_copy_bike_subgraph() -> None:

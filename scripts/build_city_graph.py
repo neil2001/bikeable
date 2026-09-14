@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Download and cache a processed OSM graph for a supported city."""
+"""Build and cache a processed OSM graph for a supported city from one extract."""
 
 from __future__ import annotations
 
@@ -11,7 +11,8 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1] / "backend"
 sys.path.insert(0, str(BACKEND_ROOT))
 
 from app.config import settings  # noqa: E402
-from app.graph.loader import build_city_graph  # noqa: E402
+from app.graph.loader import GraphPipelineError, build_city_graph  # noqa: E402
+from app.graph.qa import analyze_graph, format_qa_report  # noqa: E402
 from app.graph.registry import CITY_REGISTRY  # noqa: E402
 from app.graph.store import processed_graph_paths, read_graph_metadata  # noqa: E402
 
@@ -23,6 +24,14 @@ def main() -> int:
         choices=sorted(CITY_REGISTRY.keys()),
         help="City identifier to build",
     )
+    parser.add_argument(
+        "--osm",
+        type=Path,
+        help=(
+            "Path to an OSM XML or PBF extract. Defaults to data/raw/{city}.osm "
+            "or a clipped regional PBF."
+        ),
+    )
     args = parser.parse_args()
 
     if CITY_REGISTRY[args.city_id].is_fixture:
@@ -32,7 +41,12 @@ def main() -> int:
         )
         return 1
 
-    graph = build_city_graph(args.city_id)
+    try:
+        graph = build_city_graph(args.city_id, osm_path=args.osm)
+    except GraphPipelineError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
     paths = processed_graph_paths(settings.processed_data_dir, args.city_id)
     metadata = read_graph_metadata(paths)
 
@@ -42,6 +56,9 @@ def main() -> int:
     print(f"  nodes:   {graph.number_of_nodes()}")
     print(f"  edges:   {graph.number_of_edges()}")
     print(f"  version: {metadata['graphVersion']}")
+    print(f"  source:  {metadata['source']}")
+    print("QA")
+    print(format_qa_report(analyze_graph(graph)))
     return 0
 
 

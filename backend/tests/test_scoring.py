@@ -84,6 +84,19 @@ def test_create_bike_graph_removes_non_traversable_edges() -> None:
     )
 
 
+def test_create_bike_graph_keeps_walk_links_when_enabled() -> None:
+    graph = build_tiny_graph()
+    graph.add_edge(1, 2, key=1, highway="footway", bicycle="no", length_m=40.0)
+    from app.features.apply import apply_features_to_graph
+
+    apply_features_to_graph(graph)
+    bike_only = create_bike_graph(graph)
+    with_walk = create_bike_graph(graph, allow_walk_links=True)
+    assert not bike_only.has_edge(1, 2, 1)
+    assert with_walk.has_edge(1, 2, 1)
+    assert with_walk[1][2][1]["walk_link"] is True
+
+
 def test_score_road_returns_reasons() -> None:
     config = load_scoring_config()
     features = build_features(

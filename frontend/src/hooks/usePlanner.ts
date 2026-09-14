@@ -8,9 +8,15 @@ import {
   routeFromRoads,
   routeManual,
   routeSegment,
+  traceExtend,
 } from "../api/client";
 import { ApiClientError } from "../api/errors";
-import { applyTraceClick } from "../map/tracePath";
+import {
+  applyTraceExtension,
+  detectTraceClick,
+  flattenTraceSteps,
+  type TraceStep,
+} from "../map/tracePath";
 import type {
   CitySummary,
   Coordinate,
@@ -31,7 +37,7 @@ export function usePlanner() {
   const [bikeabilityWeight, setBikeabilityWeight] = useState(0.8);
   const [targetDistanceMi, setTargetDistanceMi] = useState(30);
   const [waypoints, setWaypoints] = useState<Coordinate[]>([]);
-  const [selectedRoadIds, setSelectedRoadIds] = useState<string[]>([]);
+  const [traceSteps, setTraceSteps] = useState<TraceStep[]>([]);
   const [start, setStart] = useState<Coordinate | null>(null);
   const [route, setRoute] = useState<RouteResponse | null>(null);
   const [segmentGeometries, setSegmentGeometries] = useState<[number, number][][]>([]);
@@ -41,6 +47,9 @@ export function usePlanner() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const debounceRef = useRef<number | null>(null);
+  const traceInFlightRef = useRef(false);
+
+  const selectedRoadIds = useMemo(() => flattenTraceSteps(traceSteps), [traceSteps]);
 
   const preferences = useMemo(
     () => ({
@@ -64,7 +73,7 @@ export function usePlanner() {
         return;
       }
       setMode(next);
-      setSelectedRoadIds([]);
+      setTraceSteps([]);
       setRoute(null);
       setSegmentGeometries([]);
       setError(null);
@@ -72,7 +81,7 @@ export function usePlanner() {
       if (next !== "manual") {
         setWaypoints([]);
       }
-      if (next !== "auto") {
+      if (next !== "auto" && next !== "trace") {
         setStart(null);
       }
     },
@@ -81,7 +90,7 @@ export function usePlanner() {
 
   const changeCityId = useCallback((next: string) => {
     setCityId(next);
-    setSelectedRoadIds([]);
+    setTraceSteps([]);
     setRoute(null);
     setSegmentGeometries([]);
     setWaypoints([]);
@@ -97,7 +106,6 @@ export function usePlanner() {
         setSegmentGeometries([]);
         return;
       }
-      setLoading(true);
       setError(null);
       try {
         const response = await routeFromRoads({ roadIds, profile }, cityId);
@@ -109,8 +117,6 @@ export function usePlanner() {
         } else {
           setError("Unable to assemble path.");
         }
-      } finally {
-        setLoading(false);
       }
     },
     [cityId, profile],
@@ -118,12 +124,7 @@ export function usePlanner() {
 
   const scheduleTraceRoute = useCallback(
     (roadIds: string[]) => {
-      if (debounceRef.current) {
-        window.clearTimeout(debounceRef.current);
-      }
-      debounceRef.current = window.setTimeout(() => {
-        void refreshTraceRoute(roadIds);
-      }, DEBOUNCE_MS);
+      void refreshTraceRoute(roadIds);
     },
     [refreshTraceRoute],
   );
@@ -264,27 +265,73 @@ export function usePlanner() {
       if (mode !== "trace") {
         return;
       }
-      const result = applyTraceClick(selectedRoadIds, roadIds);
-      if (result.type === "error") {
-        setError(result.message);
+      const action = detectTraceClick(traceSteps, roadIds);
+      if (action === "noop") {
         return;
       }
+      if (action === "undo-last" || action === "undo-first") {
+        const nextSteps =
+          action === "undo-last" ? traceSteps.slice(0, -1) : traceSteps.slice(1);
+        setTraceSteps(nextSteps);
+        setError(null);
+        scheduleTraceRoute(flattenTraceSteps(nextSteps));
+        return;
+      }
+      if (traceInFlightRef.current || !inspectId) {
+        return;
+      }
+      traceInFlightRef.current = true;
+      setLoading(true);
       setError(null);
-      setSelectedRoadIds(result.roadIds);
-      scheduleTraceRoute(result.roadIds);
+      void traceExtend(
+        {
+          selectedRoadIds,
+          clickedRoadId: inspectId,
+          start: start ?? undefined,
+          profile,
+          preferences,
+        },
+        cityId,
+      )
+        .then((response) => {
+          setTraceSteps(applyTraceExtension(traceSteps, response.roadIds));
+          setRoute(response.route);
+          setSegmentGeometries([response.route.geometry.coordinates]);
+        })
+        .catch((cause) => {
+          if (cause instanceof ApiClientError) {
+            setError(cause.message);
+          } else {
+            setError("Unable to extend path.");
+          }
+        })
+        .finally(() => {
+          traceInFlightRef.current = false;
+          setLoading(false);
+        });
     },
-    [inspectRoadAt, mode, scheduleTraceRoute, selectedRoadIds],
+    [
+      cityId,
+      inspectRoadAt,
+      mode,
+      preferences,
+      profile,
+      scheduleTraceRoute,
+      selectedRoadIds,
+      start,
+      traceSteps,
+    ],
   );
 
   const undoTrace = useCallback(() => {
-    const next = selectedRoadIds.slice(0, -1);
-    setSelectedRoadIds(next);
+    const nextSteps = traceSteps.slice(0, -1);
+    setTraceSteps(nextSteps);
     setError(null);
-    scheduleTraceRoute(next);
-  }, [scheduleTraceRoute, selectedRoadIds]);
+    scheduleTraceRoute(flattenTraceSteps(nextSteps));
+  }, [scheduleTraceRoute, traceSteps]);
 
   const clearTrace = useCallback(() => {
-    setSelectedRoadIds([]);
+    setTraceSteps([]);
     setError(null);
     setRoadInspection(null);
     scheduleTraceRoute([]);
@@ -304,6 +351,12 @@ export function usePlanner() {
         setStart(coordinate);
         if (mode === "manual") {
           setWaypoints([coordinate]);
+        }
+        if (mode === "trace") {
+          setTraceSteps([]);
+          setRoute(null);
+          setSegmentGeometries([]);
+          setError(null);
         }
       },
       () => setError("Unable to access your location."),

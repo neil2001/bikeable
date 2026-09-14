@@ -1,4 +1,4 @@
-import { Download, LoaderCircle, LocateFixed, Map as MapIcon, PenLine, Route, Settings } from "lucide-react";
+import { Download, LocateFixed, Map as MapIcon, PenLine, Route, Settings } from "lucide-react";
 import type { PlannerMode } from "../hooks/usePlanner";
 import type { CitySummary, CyclingProfile } from "../types/api";
 
@@ -28,6 +28,7 @@ type Props = {
   onClearTrace: () => void;
   hasRoute: boolean;
   hasTraceSelection: boolean;
+  hasTraceOrigin?: boolean;
 };
 
 export function RouteControls({
@@ -54,6 +55,7 @@ export function RouteControls({
   onClearTrace,
   hasRoute,
   hasTraceSelection,
+  hasTraceOrigin = false,
 }: Props) {
   return (
     <section className="controls">
@@ -166,25 +168,22 @@ export function RouteControls({
                 />
               </label>
               <button type="button" className="primary" onClick={onGenerate} disabled={loading}>
-                {loading ? (
-                  <>
-                    <LoaderCircle className="spin" size={16} strokeWidth={2} aria-hidden />
-                    Computing route…
-                  </>
-                ) : (
-                  "Generate route"
-                )}
+                Generate route
               </button>
             </>
           ) : mode === "trace" ? (
             <>
-              <p className="hint">Tap connected roads to build a path.</p>
+              <p className="hint">
+                {hasTraceOrigin
+                  ? "Tap a road to ride there from your location."
+                  : "Tap a road to start. Tap further on the same road to fill it, or tap another road to ride there."}
+              </p>
               <div className="btn-row">
                 <button
                   type="button"
                   className="secondary"
                   onClick={onUndoTrace}
-                  disabled={!hasTraceSelection}
+                  disabled={!hasTraceSelection || loading}
                 >
                   Undo last
                 </button>
@@ -192,7 +191,7 @@ export function RouteControls({
                   type="button"
                   className="secondary"
                   onClick={onClearTrace}
-                  disabled={!hasTraceSelection}
+                  disabled={!hasTraceSelection || loading}
                 >
                   Clear
                 </button>
@@ -202,12 +201,10 @@ export function RouteControls({
             <p className="hint">Click the map to add numbered waypoints.</p>
           )}
           <div className="btn-row">
-            {mode !== "trace" ? (
-              <button type="button" className="secondary" onClick={onLocate}>
-                <LocateFixed size={16} strokeWidth={1.75} />
-                Use my location
-              </button>
-            ) : null}
+            <button type="button" className="secondary" onClick={onLocate}>
+              <LocateFixed size={16} strokeWidth={1.75} />
+              Use my location
+            </button>
             {hasRoute ? (
               <button type="button" className="secondary" onClick={onExport}>
                 <Download size={16} strokeWidth={1.75} />

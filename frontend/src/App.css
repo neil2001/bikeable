@@ -271,13 +271,6 @@
   padding-top: var(--space-3);
 }
 
-.summary-loading {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  color: var(--fg);
-}
-
 .summary dt {
   font-size: 0.7rem;
   color: var(--muted);

@@ -35,3 +35,11 @@ class LoopRouteRequest(ApiModel):
 class FromRoadsRequest(ApiModel):
     road_ids: list[str] = Field(min_length=1)
     profile: CyclingProfile
+
+
+class TraceExtendRequest(ApiModel):
+    selected_road_ids: list[str] = Field(default_factory=list)
+    clicked_road_id: str
+    start: Coordinate | None = None
+    profile: CyclingProfile
+    preferences: RoutePreferences

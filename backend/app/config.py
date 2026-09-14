@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173"
     scoring_config_path: Path = REPO_ROOT / "config" / "scoring" / "v2.yaml"
     data_root: Path = REPO_ROOT / "data"
-    default_city_id: str = "fixture"
+    default_city_id: str = "vancouver"
     elevation_provider: str = "open_meteo"
     elevation_api_url: str = "https://api.open-meteo.com/v1/elevation"
 

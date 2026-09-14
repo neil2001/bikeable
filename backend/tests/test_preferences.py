@@ -11,8 +11,8 @@ from pydantic import ValidationError
 client = TestClient(app)
 
 VALID_SEGMENT = {
-    "start": {"lat": 49.2827, "lon": -123.1207},
-    "end": {"lat": 49.273, "lon": -123.1},
+    "start": {"lat": 49.2800, "lon": -123.1200},
+    "end": {"lat": 49.2820, "lon": -123.1000},
     "profile": "road",
     "preferences": {"distanceWeight": 0.2, "bikeabilityWeight": 0.8},
 }

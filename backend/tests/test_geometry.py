@@ -50,7 +50,28 @@ def test_curved_geometry_unprojection() -> None:
     assert abs(coords[-1][1] - 49.2850) < 0.001
 
 
-def test_overlay_coordinates_simplify_and_round() -> None:
+def test_overlay_coordinates_keep_curved_vertices_at_one_meter() -> None:
+    graph = nx.MultiDiGraph()
+    graph.graph["crs"] = "EPSG:32610"
+    graph.add_node(1, lat=49.2827, lon=-123.1207, x=491217.0, y=5458872.0)
+    graph.add_node(2, lat=49.2850, lon=-123.1150, x=491632.0, y=5459128.0)
+    curved_linestring = LineString(
+        [
+            (491217.0, 5458872.0),
+            (491400.0, 5459000.0),
+            (491500.0, 5459050.0),
+            (491632.0, 5459128.0),
+        ]
+    )
+    edge_data = {"geometry": curved_linestring, "length_m": 500.0}
+    graph.add_edge(1, 2, key=0, **edge_data)
+
+    overlay = edge_to_overlay_coordinates(graph, 1, 2, edge_data)
+    full = edge_to_wgs84_coordinates(graph, 1, 2, edge_data)
+    assert len(overlay) == len(full)
+
+
+def test_overlay_coordinates_round_without_dropping_vertices() -> None:
     graph = nx.MultiDiGraph()
     graph.graph["crs"] = "EPSG:32610"
     graph.add_node(1, lat=49.2827, lon=-123.1207, x=491217.0, y=5458872.0)
@@ -65,11 +86,10 @@ def test_overlay_coordinates_simplify_and_round() -> None:
     raw = edge_to_wgs84_coordinates(graph, 1, 2, edge_data)
     overlay = edge_to_overlay_coordinates(graph, 1, 2, edge_data)
 
-    assert len(overlay) < len(raw)
-    assert len(overlay) >= 2
+    assert len(overlay) == len(raw)
     for lon, lat in overlay:
-        assert lon == round(lon, 5)
-        assert lat == round(lat, 5)
+        assert lon == round(lon, 6)
+        assert lat == round(lat, 6)
 
 
 def test_path_to_coordinates_chains_curved_segments() -> None:

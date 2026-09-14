@@ -7,8 +7,8 @@ import networkx as nx
 from pyproj import Transformer
 from shapely.ops import transform
 
-OVERLAY_SIMPLIFY_M = 10.0
-OVERLAY_COORD_DECIMALS = 5
+OVERLAY_SIMPLIFY_M = 0.0
+OVERLAY_COORD_DECIMALS = 6
 
 
 @lru_cache(maxsize=32)

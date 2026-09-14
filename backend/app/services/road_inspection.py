@@ -1,6 +1,5 @@
 import networkx as nx
 from app.features.apply import read_features_from_edge
-from app.graph.geometry import edge_to_wgs84_coordinates
 from app.models.common import CyclingProfile
 from app.models.responses import (
     BikeabilityComponents,
@@ -8,7 +7,10 @@ from app.models.responses import (
     RoadFeatureDiagnostics,
     RoadInspectionResponse,
 )
-from app.routing.ids import make_road_id, parse_road_id
+from app.routing.ids import json_osmid, make_road_id, parse_road_id
+from app.routing.metrics import edges_to_coordinates
+from app.routing.point_to_point import RoutingError
+from app.routing.resolve import resolve_road_edges
 from app.scoring.config import get_profile, load_scoring_config
 from app.scoring.score import score_road_detailed
 
@@ -19,6 +21,12 @@ def inspect_road(
     profile: CyclingProfile,
 ) -> RoadInspectionResponse:
     source, target, key = parse_road_id(road_id)
+    try:
+        edges = resolve_road_edges(graph, source, target, key)
+    except RoutingError as exc:
+        raise KeyError(exc.message) from exc
+
+    source, target, key = edges[0]
     edge_data = graph.get_edge_data(source, target, key)
     if edge_data is None:
         msg = f"Road '{road_id}' was not found."
@@ -31,7 +39,7 @@ def inspect_road(
         get_profile(profile.value, scoring),
         config=scoring,
     )
-    coordinates = edge_to_wgs84_coordinates(graph, source, target, edge_data)
+    coordinates = edges_to_coordinates(graph, edges)
     stored_reasons = edge_data.get("score_reasons")
     reasons = (
         [str(item) for item in stored_reasons]
@@ -49,6 +57,7 @@ def inspect_road(
             speed_kph=features.speed_kph,
             lanes=features.lane_count,
             surface=edge_data.get("surface"),
+            osmid=json_osmid(edge_data.get("osmid")),
             protected_bike_infrastructure=features.protected_infrastructure,
             bike_lane=features.dedicated_bike_lane,
             grade=features.grade,

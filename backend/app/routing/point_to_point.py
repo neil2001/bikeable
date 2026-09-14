@@ -24,7 +24,7 @@ def route_point_to_point(
     try:
         start_node = nearest_node(routing_graph, start)
         end_node = nearest_node(routing_graph, end)
-    except Exception as exc:
+    except ValueError as exc:
         raise RoutingError(
             "INVALID_COORDINATES",
             "Could not resolve start or end to the street network.",
@@ -40,9 +40,16 @@ def route_point_to_point(
     except nx.NetworkXNoPath as exc:
         raise RoutingError(
             "ROUTE_NOT_FOUND",
-            "No valid cycling route could be constructed.",
+            _no_path_message(routing_graph, start_node, end_node),
         ) from exc
 
     metrics = compute_route_metrics(routing_graph, path)
     geometry = build_line_string(routing_graph, path)
     return path, metrics, geometry
+
+
+def _no_path_message(graph: nx.MultiDiGraph, start_node: int, end_node: int) -> str:
+    undirected = graph.to_undirected()
+    if nx.has_path(undirected, start_node, end_node):
+        return "No valid cycling route could be constructed."
+    return "Start and end are in disconnected parts of the cycling network."

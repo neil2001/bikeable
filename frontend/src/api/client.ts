@@ -10,6 +10,8 @@ import type {
   RouteResponse,
   SegmentRouteRequest,
   SegmentRouteResponse,
+  TraceExtendRequest,
+  TraceExtendResponse,
 } from "../types/api";
 import { parseApiResponse } from "./errors";
 import {
@@ -20,7 +22,7 @@ import {
 } from "./mocks/vancouver";
 
 const apiMode = import.meta.env.VITE_API_MODE ?? "live";
-const defaultCityId = import.meta.env.VITE_DEFAULT_CITY_ID ?? "fixture";
+const defaultCityId = import.meta.env.VITE_DEFAULT_CITY_ID ?? "vancouver";
 
 export function isMockApi(): boolean {
   return apiMode === "mock";
@@ -102,6 +104,18 @@ export async function routeFromRoads(
     body: JSON.stringify(request),
   });
   return parseApiResponse<RouteResponse>(response);
+}
+
+export async function traceExtend(
+  request: TraceExtendRequest,
+  cityId: string = defaultCityId,
+): Promise<TraceExtendResponse> {
+  const response = await fetch(`/api/v1/routes/trace-extend?cityId=${cityId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  return parseApiResponse<TraceExtendResponse>(response);
 }
 
 export async function generateLoop(

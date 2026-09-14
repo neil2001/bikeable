@@ -7,7 +7,7 @@ from pathlib import Path
 import networkx as nx
 import osmnx as ox
 
-GRAPH_VERSION = "1"
+GRAPH_VERSION = "4"
 
 
 @dataclass(frozen=True)
@@ -28,18 +28,18 @@ def processed_graph_paths(processed_root: Path, city_id: str) -> ProcessedGraphP
     )
 
 
-def section_graph_paths(
+def save_qa_report(
+    report: object,
+    *,
     processed_root: Path,
     city_id: str,
-    section_id: str,
-) -> ProcessedGraphPaths:
-    section_dir = processed_root / city_id / "sections" / section_id
-    return ProcessedGraphPaths(
-        city_dir=section_dir,
-        graphml=section_dir / "graph.graphml",
-        pickle=section_dir / "graph.pkl",
-        metadata=section_dir / "metadata.json",
-    )
+) -> Path:
+    paths = processed_graph_paths(processed_root, city_id)
+    paths.city_dir.mkdir(parents=True, exist_ok=True)
+    qa_path = paths.city_dir / "qa.json"
+    payload = report.to_dict() if hasattr(report, "to_dict") else report
+    qa_path.write_text(json.dumps(payload, indent=2) + "\n")
+    return qa_path
 
 
 def save_processed_graph(

@@ -19,7 +19,7 @@ from app.scoring.score import score_graph
 from app.services.bikeability_map import graph_to_bikeability_geojson
 
 _CACHE_LIMIT = 2
-OVERLAY_FORMAT_VERSION = "1"
+OVERLAY_FORMAT_VERSION = "4"
 
 
 class CityGraphUnavailableError(Exception):
@@ -120,7 +120,7 @@ def get_scored_graph(
         scored = score_graph(graph, profile_id)
         _store_scored_graph(cache_key, scored)
 
-    bike_graph = create_bike_graph(scored)
+    bike_graph = create_bike_graph(scored, allow_walk_links=True)
     _bike_graph_cache[cache_key] = bike_graph
     _touch_cache_key(cache_key)
     return scored, bike_graph
@@ -173,9 +173,21 @@ def get_bikeability_overlay_path(city_id: str, profile_id: str) -> Path:
     return path
 
 
+def _overlay_bust_token(city_id: str) -> str:
+    """Change when the processed graph is rebuilt so browser overlay caches miss."""
+    paths = processed_graph_paths(settings.processed_data_dir, city_id)
+    if not paths.metadata.exists():
+        return "0"
+    metadata = read_graph_metadata(paths)
+    return f"{metadata.get('nodeCount', 0)}-{metadata.get('edgeCount', 0)}"
+
+
 def bikeability_etag(city_id: str, profile_id: str) -> str:
     city_id_key, profile_key, graph_version, score_version = _cache_key(
         city_id,
         profile_id,
     )
-    return f'"{city_id_key}-{graph_version}-{score_version}-{profile_key}"'
+    return (
+        f'"{city_id_key}-{graph_version}-{score_version}-'
+        f"{OVERLAY_FORMAT_VERSION}-{profile_key}-{_overlay_bust_token(city_id)}\""
+    )

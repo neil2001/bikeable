@@ -65,13 +65,16 @@ def test_overlay_road_ids_are_inspectable() -> None:
         city_id="fixture",
         score_version="2",
     )
-    road_id = overlay["features"][0]["properties"]["roadId"]
+    feature = overlay["features"][0]
+    road_id = feature["properties"]["roadId"]
+    assert "osmid" in feature["properties"]
+    assert feature["id"] == feature["properties"]["osmid"]
     inspection = inspect_road(scored, road_id, CyclingProfile.ROAD)
     assert inspection.road_id == road_id
     assert 0 <= inspection.bikeability.score <= 10
 
 
-def test_overlay_coordinates_use_five_decimals() -> None:
+def test_overlay_coordinates_use_six_decimals() -> None:
     scored = _scored_fixture()
     overlay = graph_to_bikeability_geojson(
         scored,
@@ -80,5 +83,5 @@ def test_overlay_coordinates_use_five_decimals() -> None:
     )
     for feature in overlay["features"]:
         for lon, lat in feature["geometry"]["coordinates"]:
-            assert lon == round(lon, 5)
-            assert lat == round(lat, 5)
+            assert lon == round(lon, 6)
+            assert lat == round(lat, 6)

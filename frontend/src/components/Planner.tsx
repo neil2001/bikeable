@@ -83,7 +83,7 @@ export function Planner() {
           {planner.mode === "manual"
             ? "Click to drop a waypoint. Drag the map to pan."
             : planner.mode === "trace"
-              ? "Tap connected roads to trace a path."
+              ? "Tap a road to start, skip ahead on the same street, or jump to another."
               : "Click a start, then generate a loop."}
         </p>
       </header>
@@ -136,9 +136,10 @@ export function Planner() {
           onClearTrace={planner.clearTrace}
           hasRoute={Boolean(planner.route)}
           hasTraceSelection={planner.selectedRoadIds.length > 0}
+          hasTraceOrigin={Boolean(planner.start)}
         />
 
-        <RouteSummary route={planner.route} loading={planner.loading} />
+        <RouteSummary route={planner.route} />
 
         <RouteCharts
           route={planner.route}

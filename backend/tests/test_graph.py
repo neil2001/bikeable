@@ -8,8 +8,9 @@ from app.graph.fixture import (
     load_fixture_graph,
     write_fixture_graphml,
 )
-from app.graph.loader import load_city_graph
+from app.graph.loader import GraphPipelineError, load_city_graph
 from app.graph.store import (
+    GRAPH_VERSION,
     load_processed_graph,
     processed_graph_paths,
     read_graph_metadata,
@@ -35,6 +36,7 @@ def test_fixture_graph_has_lat_lon_and_length_m() -> None:
 
     for _source, _target, _key, edge_data in graph.edges(keys=True, data=True):
         assert edge_data["length_m"] > 0
+        assert edge_data.get("osmid") is not None
 
 
 def test_fixture_graph_round_trip(processed_root: Path) -> None:
@@ -52,7 +54,7 @@ def test_fixture_graph_round_trip(processed_root: Path) -> None:
     assert loaded.number_of_nodes() == graph.number_of_nodes()
     assert loaded.number_of_edges() == graph.number_of_edges()
     assert metadata["cityId"] == "fixture"
-    assert metadata["graphVersion"] == "1"
+    assert metadata["graphVersion"] == GRAPH_VERSION
     assert paths.graphml.exists()
     assert paths.pickle.exists()
 
@@ -64,7 +66,7 @@ def test_load_fixture_city_does_not_use_processed_cache(processed_root: Path) ->
     assert not processed_graph_paths(processed_root, "fixture").graphml.exists()
 
 
-def test_cache_hit_does_not_call_osmnx(
+def test_cache_hit_does_not_rebuild_osm(
     processed_root: Path,
     mocker: MockerFixture,
 ) -> None:
@@ -76,20 +78,20 @@ def test_cache_hit_does_not_call_osmnx(
         source="test-cache",
     )
 
-    mock_download = mocker.patch("app.graph.loader.download_city_graph")
+    mock_build = mocker.patch("app.graph.loader.build_osm_graph")
     loaded = load_city_graph("vancouver")
 
-    mock_download.assert_not_called()
+    mock_build.assert_not_called()
     assert loaded.number_of_nodes() == graph.number_of_nodes()
 
 
-def test_cache_miss_downloads_and_persists_graph(
+def test_cache_miss_builds_from_osm_extract(
     processed_root: Path,
     mocker: MockerFixture,
 ) -> None:
     graph = build_tiny_graph()
     mock_build = mocker.patch(
-        "app.graph.loader._build_sectioned_graph",
+        "app.graph.loader.build_osm_graph",
         return_value=graph,
     )
 
@@ -97,23 +99,16 @@ def test_cache_miss_downloads_and_persists_graph(
     paths = processed_graph_paths(processed_root, "vancouver")
 
     mock_build.assert_called_once()
-    called_city_id, called_sections = mock_build.call_args.args[:2]
-    assert called_city_id == "vancouver"
-    assert len(called_sections) == 4
     assert loaded.number_of_nodes() == 4
     assert paths.graphml.exists()
     assert paths.metadata.exists()
+    metadata = read_graph_metadata(paths)
+    assert metadata["source"].startswith("bbox:")
+    assert (paths.city_dir / "qa.json").exists()
 
 
-def test_fixture_graphml_is_loadable() -> None:
-    fixture_path = write_fixture_graphml()
-    graph = load_fixture_graph()
-    assert fixture_path.exists()
-    assert graph.number_of_edges() >= 4
-
-
-def test_download_city_graph_uses_bbox(mocker: MockerFixture) -> None:
-    from app.graph.ingest import download_city_graph
+def test_graph_from_bbox_uses_one_custom_filter(mocker: MockerFixture) -> None:
+    from app.graph.ingest import CUSTOM_FILTER, graph_from_bbox
     from app.graph.registry import VANCOUVER
 
     graph = build_tiny_graph()
@@ -122,28 +117,38 @@ def test_download_city_graph_uses_bbox(mocker: MockerFixture) -> None:
         return_value=graph,
     )
     mocker.patch("app.graph.ingest.ox.project_graph", return_value=graph)
-    mocker.patch("app.graph.ingest.ox.graph_from_place")
     mocker.patch(
         "app.graph.ingest.ox.features_from_bbox",
         side_effect=Exception("offline"),
     )
 
-    result = download_city_graph(VANCOUVER)
-
-    assert mock_from_bbox.call_count == 2
-    mock_from_bbox.assert_any_call(
-        VANCOUVER.osm_bbox,
-        network_type="drive",
-        simplify=True,
-        truncate_by_edge=True,
-    )
-    mock_from_bbox.assert_any_call(
-        VANCOUVER.osm_bbox,
-        network_type="bike",
-        simplify=True,
-        truncate_by_edge=True,
-    )
+    result = graph_from_bbox(VANCOUVER)
+    mock_from_bbox.assert_called_once()
+    kwargs = mock_from_bbox.call_args.kwargs
+    assert kwargs["custom_filter"] == CUSTOM_FILTER
+    assert kwargs["simplify"] is True
     assert result.number_of_nodes() == graph.number_of_nodes()
+
+
+def test_build_errors_when_extract_missing(
+    processed_root: Path,
+    mocker: MockerFixture,
+) -> None:
+    from app.graph.extract import OsmExtractError
+
+    mocker.patch(
+        "app.graph.loader.build_osm_graph",
+        side_effect=OsmExtractError("No OSM extract"),
+    )
+    with pytest.raises(GraphPipelineError, match="No OSM extract"):
+        load_city_graph("vancouver")
+
+
+def test_fixture_graphml_is_loadable() -> None:
+    fixture_path = write_fixture_graphml()
+    graph = load_fixture_graph()
+    assert fixture_path.exists()
+    assert graph.number_of_edges() >= 4
 
 
 def test_configure_osmnx_retains_cycling_tags() -> None:
@@ -155,71 +160,31 @@ def test_configure_osmnx_retains_cycling_tags() -> None:
         assert tag in ox.settings.useful_tags_way
 
 
-def test_merge_graphs_keeps_cycleway_tags() -> None:
-    from app.graph.ingest import merge_graphs
+def test_keep_ingest_edge_drops_motorway_and_private() -> None:
+    from app.graph.ingest import keep_ingest_edge
 
-    drive = nx.MultiDiGraph()
-    drive.add_node(1, lat=49.28, lon=-123.12, x=0.0, y=0.0)
-    drive.add_node(2, lat=49.29, lon=-123.11, x=100.0, y=0.0)
-    drive.add_edge(
-        1,
-        2,
-        key=0,
-        osmid=100,
-        highway="tertiary",
-        length=50.0,
-        length_m=50.0,
-    )
-
-    bike = nx.MultiDiGraph()
-    bike.add_node(1, lat=49.28, lon=-123.12, x=0.0, y=0.0)
-    bike.add_node(2, lat=49.29, lon=-123.11, x=100.0, y=0.0)
-    bike.add_edge(
-        1,
-        2,
-        key=0,
-        osmid=100,
-        highway="tertiary",
-        length=50.0,
-        length_m=50.0,
-        **{"cycleway:right": "separate", "surface": "asphalt", "bicycle": "yes"},
-    )
-
-    merged = merge_graphs(drive, bike)
-    data = merged[1][2][0]
-    assert data["cycleway:right"] == "separate"
-    assert data["surface"] == "asphalt"
-    assert data["bicycle"] == "yes"
+    assert keep_ingest_edge({"highway": "residential"})
+    assert keep_ingest_edge({"highway": "cycleway"})
+    assert keep_ingest_edge({"highway": "footway"})
+    assert not keep_ingest_edge({"highway": "motorway"})
+    assert not keep_ingest_edge({"highway": "residential", "bicycle": "no"})
+    assert not keep_ingest_edge({"highway": "residential", "access": "private"})
 
 
-def test_merge_graphs_includes_exclusive_cycleway() -> None:
-    from app.graph.ingest import merge_graphs
+def test_drop_excluded_edges_removes_motorways() -> None:
+    from app.graph.ingest import _drop_excluded_edges
 
-    drive = nx.MultiDiGraph()
-    drive.add_node(1, lat=49.28, lon=-123.12, x=0.0, y=0.0)
-    drive.add_node(2, lat=49.29, lon=-123.11, x=100.0, y=0.0)
-    drive.add_edge(1, 2, key=0, osmid=100, highway="tertiary", length=50.0)
-
-    bike = nx.MultiDiGraph()
-    bike.add_node(1, lat=49.28, lon=-123.12, x=0.0, y=0.0)
-    bike.add_node(2, lat=49.29, lon=-123.11, x=100.0, y=0.0)
-    bike.add_node(3, lat=49.30, lon=-123.10, x=200.0, y=0.0)
-    bike.add_edge(1, 2, key=0, osmid=100, highway="tertiary", length=50.0)
-    bike.add_edge(
-        2,
-        3,
-        key=0,
-        osmid=200,
-        highway="cycleway",
-        length=80.0,
-        bicycle="designated",
-    )
-
-    merged = merge_graphs(drive, bike)
-    cycleways = [
-        data
-        for *_rest, data in merged.edges(keys=True, data=True)
-        if data.get("highway") == "cycleway"
-    ]
-    assert len(cycleways) == 1
-    assert cycleways[0]["bicycle"] == "designated"
+    graph = nx.MultiDiGraph()
+    graph.add_node(1, lat=49.28, lon=-123.12, x=-123.12, y=49.28)
+    graph.add_node(2, lat=49.281, lon=-123.11, x=-123.11, y=49.281)
+    graph.add_node(3, lat=49.282, lon=-123.10, x=-123.10, y=49.282)
+    graph.add_edge(1, 2, key=0, highway="residential", length=100.0)
+    graph.add_edge(2, 3, key=0, highway="cycleway", length=100.0)
+    graph.add_edge(1, 3, key=0, highway="motorway", length=200.0)
+    filtered = _drop_excluded_edges(graph)
+    highways = {
+        data.get("highway")
+        for _u, _v, _k, data in filtered.edges(keys=True, data=True)
+    }
+    assert highways == {"residential", "cycleway"}
+    assert nx.is_weakly_connected(filtered)

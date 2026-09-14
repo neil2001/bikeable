@@ -190,6 +190,7 @@ export function MapView({
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const lastFitRouteKeyRef = useRef<string>("");
   const lastCityRef = useRef<string>("");
+  const lastStartFlyRef = useRef<string>("");
   const pointerDownRef = useRef<{ x: number; y: number } | null>(null);
   const dragOccurredRef = useRef(false);
   const suppressClickRef = useRef(false);
@@ -240,7 +241,6 @@ export function MapView({
       map.addSource("bikeability", {
         type: "geojson",
         data: { type: "FeatureCollection", features: [] },
-        tolerance: 2,
       });
 
       map.addLayer({
@@ -248,7 +248,7 @@ export function MapView({
         type: "line",
         source: "bikeability",
         layout: {
-          "line-cap": "butt",
+          "line-cap": "round",
           "line-join": "round",
           visibility: "visible",
         },
@@ -518,6 +518,26 @@ export function MapView({
 
   useEffect(() => {
     const map = mapRef.current;
+    if (!map || !readyRef.current || mode !== "trace" || !start) {
+      if (mode !== "trace") {
+        lastStartFlyRef.current = "";
+      }
+      return;
+    }
+    const key = `${start.lat.toFixed(6)}:${start.lon.toFixed(6)}`;
+    if (key === lastStartFlyRef.current) {
+      return;
+    }
+    lastStartFlyRef.current = key;
+    map.flyTo({
+      center: [start.lon, start.lat] as LngLatLike,
+      zoom: Math.max(map.getZoom(), 15),
+      duration: 800,
+    });
+  }, [start, mode, mapReady]);
+
+  useEffect(() => {
+    const map = mapRef.current;
     if (!map) {
       return;
     }
@@ -530,6 +550,17 @@ export function MapView({
     };
 
     if (mode === "trace") {
+      if (start) {
+        const { container } = createWaypointElement("S", "Start location", true);
+        const marker = new maplibregl.Marker({
+          element: container,
+          anchor: "center",
+          draggable: false,
+        })
+          .setLngLat([start.lon, start.lat] as LngLatLike)
+          .addTo(map);
+        markersRef.current.push(marker);
+      }
       return;
     }
 
@@ -603,7 +634,7 @@ export function MapView({
 
       markersRef.current.push(marker);
     });
-  }, [waypoints, start, mode, onMoveWaypoint, onRemoveWaypoint, onMoveStart]);
+  }, [waypoints, start, mode, mapReady, onMoveWaypoint, onRemoveWaypoint, onMoveStart]);
 
   return <div ref={containerRef} className="map-container" aria-label="Route map" />;
 }

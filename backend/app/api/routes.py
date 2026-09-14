@@ -9,8 +9,13 @@ from app.models.requests import (
     LoopRouteRequest,
     ManualRouteRequest,
     SegmentRouteRequest,
+    TraceExtendRequest,
 )
-from app.models.responses import RouteResponse, SegmentRouteResponse
+from app.models.responses import (
+    RouteResponse,
+    SegmentRouteResponse,
+    TraceExtendResponse,
+)
 from app.routing.point_to_point import RoutingError
 from app.services.city_registry import resolve_city_id
 from app.services.route_store import get_route
@@ -19,6 +24,7 @@ from app.services.routing import (
     route_loop,
     route_manual,
     route_segment,
+    route_trace_extend,
 )
 
 router = APIRouter()
@@ -66,6 +72,17 @@ def route_from_roads_endpoint(
 ) -> RouteResponse:
     try:
         return route_from_roads(body, resolve_city_id(cityId))
+    except RoutingError as exc:
+        raise _routing_error(exc) from exc
+
+
+@router.post("/routes/trace-extend", response_model=TraceExtendResponse)
+def route_trace_extend_endpoint(
+    body: TraceExtendRequest,
+    cityId: str = Query(default="fixture"),
+) -> TraceExtendResponse:
+    try:
+        return route_trace_extend(body, resolve_city_id(cityId))
     except RoutingError as exc:
         raise _routing_error(exc) from exc
 

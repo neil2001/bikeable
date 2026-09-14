@@ -1,20 +1,10 @@
-import { LoaderCircle } from "lucide-react";
 import type { RouteResponse } from "../types/api";
 
 type Props = {
   route: RouteResponse | null;
-  loading: boolean;
 };
 
-export function RouteSummary({ route, loading }: Props) {
-  if (loading) {
-    return (
-      <p className="summary placeholder summary-loading" role="status" aria-live="polite">
-        <LoaderCircle className="spin" size={16} strokeWidth={2} aria-hidden />
-        Computing route…
-      </p>
-    );
-  }
+export function RouteSummary({ route }: Props) {
   if (!route) {
     return <p className="summary placeholder">No route yet.</p>;
   }

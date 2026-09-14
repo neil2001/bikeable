@@ -1,3 +1,5 @@
+from typing import Literal
+
 from app.models.common import (
     ApiModel,
     CyclingProfile,
@@ -72,13 +74,21 @@ class SegmentRouteResponse(ApiModel):
     elevation_gain_m: float
 
 
+class TraceExtendResponse(ApiModel):
+    road_ids: list[str]
+    action: Literal["select", "same_road", "route"]
+    route: RouteResponse
+
+
 class BikeabilityFeatureProperties(ApiModel):
     road_id: str
     bikeability: float
+    osmid: int | list[int] | None = None
 
 
 class BikeabilityFeature(ApiModel):
     type: str = "Feature"
+    id: int | None = None
     properties: BikeabilityFeatureProperties
     geometry: GeoJSONLineString
 
@@ -94,6 +104,7 @@ class RoadFeatureDiagnostics(ApiModel):
     speed_kph: float | None = None
     lanes: int | None = None
     surface: str | None = None
+    osmid: int | list[int] | None = None
     protected_bike_infrastructure: bool
     bike_lane: bool
     grade: float | None = None

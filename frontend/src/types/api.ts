@@ -93,6 +93,22 @@ export type FromRoadsRequest = {
   profile: CyclingProfile;
 };
 
+export type TraceExtendRequest = {
+  selectedRoadIds: string[];
+  clickedRoadId: string;
+  start?: Coordinate | null;
+  profile: CyclingProfile;
+  preferences: RoutePreferences;
+};
+
+export type TraceExtendAction = "select" | "same_road" | "route";
+
+export type TraceExtendResponse = {
+  roadIds: string[];
+  action: TraceExtendAction;
+  route: RouteResponse;
+};
+
 export type HealthResponse = {
   status: string;
 };
@@ -118,9 +134,11 @@ export type CityListResponse = {
 
 export type BikeabilityFeature = {
   type: "Feature";
+  id?: number;
   properties: {
     roadId: string;
     bikeability: number;
+    osmid?: number | number[] | null;
   };
   geometry: GeoJsonLineString;
 };
@@ -139,6 +157,7 @@ export type RoadInspectionResponse = {
     speedKph?: number | null;
     lanes?: number | null;
     surface?: string | null;
+    osmid?: number | number[] | null;
     protectedBikeInfrastructure: boolean;
     bikeLane: boolean;
     grade?: number | null;

@@ -42,17 +42,41 @@ def test_distance_preference_uses_primary_shortcut() -> None:
 
 def test_unreachable_route_raises() -> None:
     graph = score_graph(apply_features_to_graph(build_tiny_graph()), "road")
-    graph.add_node(99, lat=50.0, lon=-124.0, x=0.0, y=0.0)
+    graph.add_node(99, lat=49.2810, lon=-123.1210, x=-80.0, y=80.0)
+    graph.add_node(100, lat=49.2815, lon=-123.1215, x=-120.0, y=120.0)
+    graph.add_edge(
+        99, 100, key=0, highway="residential", length_m=60.0, bikeability=6.0
+    )
+    graph.add_edge(
+        100, 99, key=0, highway="residential", length_m=60.0, bikeability=6.0
+    )
     import pytest
     from app.routing.point_to_point import RoutingError
 
-    with pytest.raises(RoutingError):
+    with pytest.raises(RoutingError) as exc:
+        route_point_to_point(
+            graph,
+            Coordinate(lat=49.2800, lon=-123.1200),
+            Coordinate(lat=49.2810, lon=-123.1210),
+            _preferences(distance_weight=0.5),
+        )
+    assert exc.value.code == "ROUTE_NOT_FOUND"
+    assert "disconnected" in exc.value.message
+
+
+def test_far_from_network_raises_invalid_coordinates() -> None:
+    graph = score_graph(apply_features_to_graph(build_tiny_graph()), "road")
+    import pytest
+    from app.routing.point_to_point import RoutingError
+
+    with pytest.raises(RoutingError) as exc:
         route_point_to_point(
             graph,
             Coordinate(lat=49.2800, lon=-123.1200),
             Coordinate(lat=50.0, lon=-124.0),
             _preferences(distance_weight=0.5),
         )
+    assert exc.value.code == "INVALID_COORDINATES"
 
 
 def test_segment_api_returns_geometry() -> None:

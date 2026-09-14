@@ -32,7 +32,13 @@ def generate_loop(
     min_distance = constraints.min_distance_m or target_distance_m * 0.9
     max_distance = constraints.max_distance_m or target_distance_m * 1.1
 
-    start_node = nearest_node(graph, start)
+    try:
+        start_node = nearest_node(graph, start)
+    except ValueError as exc:
+        raise RoutingError(
+            "INVALID_COORDINATES",
+            "Could not resolve start or end to the street network.",
+        ) from exc
     start_lat = float(graph.nodes[start_node]["lat"])
     start_lon = float(graph.nodes[start_node]["lon"])
 

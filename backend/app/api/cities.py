@@ -71,7 +71,7 @@ def get_city_bikeability(
         return JSONResponse(
             status_code=304,
             headers={
-                "Cache-Control": "public, max-age=86400",
+                "Cache-Control": "public, max-age=0, must-revalidate",
                 "ETag": etag,
             },
         )
@@ -80,7 +80,7 @@ def get_city_bikeability(
         overlay_path,
         media_type="application/json",
         headers={
-            "Cache-Control": "public, max-age=86400",
+            "Cache-Control": "public, max-age=0, must-revalidate",
             "ETag": etag,
             "Content-Encoding": "gzip",
         },

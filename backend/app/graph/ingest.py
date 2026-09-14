@@ -1,7 +1,16 @@
+from __future__ import annotations
+
+import subprocess
+from pathlib import Path
+from typing import Any
+
 import networkx as nx
 import osmnx as ox
 
-from app.graph.registry import CityDefinition, SectionDefinition
+from app.features.normalize import coerce_tag, normalize_highway_class
+from app.graph.extract import OsmExtractError, has_usable_extract, resolve_osm_xml
+from app.graph.registry import CityDefinition
+from app.graph.types import BBox
 
 EXTRA_WAY_TAGS = (
     "bicycle",
@@ -20,6 +29,22 @@ EXTRA_WAY_TAGS = (
     "motor_vehicle",
 )
 
+EXCLUDED_HIGHWAYS = {
+    "abandoned",
+    "construction",
+    "planned",
+    "proposed",
+    "platform",
+    "raceway",
+    "razed",
+    "bus_guideway",
+    "elevator",
+    "escalator",
+    "corridor",
+    "motorway",
+    "motorway_link",
+}
+
 
 def configure_osmnx_tags() -> None:
     """Keep cycling and surface tags that scoring needs."""
@@ -28,130 +53,148 @@ def configure_osmnx_tags() -> None:
     )
 
 
-def download_section_graph(section: SectionDefinition) -> nx.MultiDiGraph:
-    """Download a single metro section (drive ∪ bike) for later stitching."""
-    configure_osmnx_tags()
-    drive = ox.graph_from_bbox(
-        section.osm_bbox,
-        network_type="drive",
-        simplify=True,
-        truncate_by_edge=True,
-    )
-    bike = ox.graph_from_bbox(
-        section.osm_bbox,
-        network_type="bike",
-        simplify=True,
-        truncate_by_edge=True,
-    )
-    graph = merge_graphs(drive, bike)
-    graph = ensure_wgs84_coordinates(graph)
-    graph = annotate_park_edges(graph, section.osm_bbox)
-    graph = ox.project_graph(graph)
-    return normalize_graph(graph)
+CUSTOM_FILTER = (
+    '["highway"]["area"!~"yes"]'
+    '["highway"!~"abandoned|construction|planned|proposed|platform|raceway|'
+    'razed|bus_guideway|elevator|escalator|corridor|motorway|motorway_link"]'
+    '["bicycle"!~"no"]'
+    '["access"!~"private"]'
+)
 
 
-def download_city_graph(city: CityDefinition) -> nx.MultiDiGraph:
-    """Download a cyclable network (drive ∪ bike) and prepare it for scoring."""
-    configure_osmnx_tags()
-    if city.osm_bbox is not None:
-        drive = ox.graph_from_bbox(
-            city.osm_bbox,
-            network_type="drive",
-            simplify=True,
-            truncate_by_edge=True,
-        )
-        bike = ox.graph_from_bbox(
-            city.osm_bbox,
-            network_type="bike",
-            simplify=True,
-            truncate_by_edge=True,
-        )
-        graph = merge_graphs(drive, bike)
-        graph = ensure_wgs84_coordinates(graph)
-        graph = annotate_park_edges(graph, city.osm_bbox)
-    elif city.osm_place is not None:
-        drive = ox.graph_from_place(city.osm_place, network_type="drive", simplify=True)
-        bike = ox.graph_from_place(city.osm_place, network_type="bike", simplify=True)
-        graph = merge_graphs(drive, bike)
-        graph = ensure_wgs84_coordinates(graph)
-    else:
-        msg = f"City '{city.city_id}' has no OSM bbox or place query."
+def build_osm_graph(
+    city: CityDefinition,
+    *,
+    osm_path: Path | None = None,
+) -> nx.MultiDiGraph:
+    """Build a cyclable NetworkX graph from one OSM extract or one bbox query."""
+    if osm_path is not None or has_usable_extract(city):
+        try:
+            xml_path = resolve_osm_xml(city, osm_path=osm_path)
+            return graph_from_osm_xml(xml_path, bbox=city.osm_bbox)
+        except (OsmExtractError, subprocess.CalledProcessError):
+            if osm_path is not None or city.osm_bbox is None:
+                raise
+    if city.osm_bbox is None:
+        msg = f"City '{city.city_id}' has no OSM bbox or extract path."
         raise ValueError(msg)
+    return graph_from_bbox(city)
 
+
+def graph_from_bbox(city: CityDefinition) -> nx.MultiDiGraph:
+    if city.osm_bbox is None:
+        msg = f"City '{city.city_id}' has no OSM bbox."
+        raise ValueError(msg)
+    configure_osmnx_tags()
+    ox.settings.requests_timeout = 300
+    graph = ox.graph_from_bbox(
+        city.osm_bbox,
+        custom_filter=CUSTOM_FILTER,
+        simplify=True,
+        retain_all=False,
+        truncate_by_edge=True,
+    )
+    return _prepare_downloaded_graph(graph, bbox=city.osm_bbox)
+
+
+def graph_from_osm_xml(
+    xml_path: Path,
+    *,
+    bbox: BBox | None = None,
+) -> nx.MultiDiGraph:
+    configure_osmnx_tags()
+    graph = ox.graph_from_xml(xml_path, simplify=True, retain_all=False)
+    return _prepare_downloaded_graph(graph, bbox=bbox, osm_xml=xml_path)
+
+
+def _prepare_downloaded_graph(
+    graph: nx.MultiDiGraph,
+    *,
+    bbox: BBox | None,
+    osm_xml: Path | None = None,
+) -> nx.MultiDiGraph:
+    graph = _drop_excluded_edges(graph)
+    graph = ensure_wgs84_coordinates(graph)
+    if bbox is not None:
+        graph = annotate_park_edges(graph, bbox, osm_xml=osm_xml)
+    if graph.number_of_nodes() == 0:
+        return normalize_graph(graph)
     graph = ox.project_graph(graph)
     return normalize_graph(graph)
 
 
-def _osmid_key(value: object) -> object:
-    if value is None:
-        return None
-    if isinstance(value, list):
-        return tuple(value)
-    return value
+def keep_ingest_edge(edge_data: dict[str, Any]) -> bool:
+    highway = normalize_highway_class(edge_data.get("highway"))
+    if highway is None or highway in EXCLUDED_HIGHWAYS:
+        return False
+    if coerce_tag(edge_data.get("bicycle")) == "no":
+        return False
+    if coerce_tag(edge_data.get("access")) == "private":
+        return False
+    return True
 
 
-def merge_graphs(drive: nx.MultiDiGraph, bike: nx.MultiDiGraph) -> nx.MultiDiGraph:
-    """Union drive and bike graphs, filling missing bike-facility tags."""
-    graph = drive.copy()
-    graph.add_nodes_from(bike.nodes(data=True))
-    for source, target, key, data in bike.edges(keys=True, data=True):
-        osmid = _osmid_key(data.get("osmid"))
-        matched_key = None
-        if graph.has_edge(source, target):
-            for existing_key, existing in graph[source][target].items():
-                if osmid is not None and _osmid_key(existing.get("osmid")) == osmid:
-                    matched_key = existing_key
-                    break
-        if matched_key is not None:
-            existing = graph[source][target][matched_key]
-            for tag, value in data.items():
-                if existing.get(tag) in (None, "") and value not in (None, ""):
-                    existing[tag] = value
-        elif osmid is None and graph.has_edge(source, target):
-            existing = next(iter(graph[source][target].values()))
-            for tag, value in data.items():
-                if existing.get(tag) in (None, "") and value not in (None, ""):
-                    existing[tag] = value
-        else:
-            new_key = key
-            while graph.has_edge(source, target, new_key):
-                new_key = new_key + 1 if isinstance(new_key, int) else 0
-            graph.add_edge(source, target, key=new_key, **data)
+def _drop_excluded_edges(graph: nx.MultiDiGraph) -> nx.MultiDiGraph:
+    removable = [
+        (source, target, key)
+        for source, target, key, edge_data in graph.edges(keys=True, data=True)
+        if not keep_ingest_edge(edge_data)
+    ]
+    graph.remove_edges_from(removable)
+    graph.remove_nodes_from(list(nx.isolates(graph)))
     return graph
 
 
 def annotate_park_edges(
     graph: nx.MultiDiGraph,
-    bbox: tuple[float, float, float, float],
+    bbox: BBox,
+    *,
+    osm_xml: Path | None = None,
 ) -> nx.MultiDiGraph:
     """Mark edges whose midpoint is within ~40 m of a park or forest."""
-    try:
-        parks = ox.features_from_bbox(
-            bbox,
-            tags={"leisure": "park", "landuse": "forest"},
-        )
-    except Exception:
-        return graph
-    if parks is None or parks.empty:
+    parks = _load_park_geometries(bbox, osm_xml=osm_xml)
+    if parks is None:
         return graph
 
     from shapely.geometry import Point
     from shapely.ops import unary_union
 
-    geoms = [geom for geom in parks.geometry.dropna().tolist() if geom is not None]
+    geoms = [geom for geom in parks if geom is not None]
     if not geoms:
         return graph
     # ~40 m in degrees at Vancouver latitude
     park_area = unary_union(geoms).buffer(0.00036)
-    for source, target, _key, edge_data in graph.edges(keys=True, data=True):
-        source_node = graph.nodes[source]
-        target_node = graph.nodes[target]
+    for _source, _target, _key, edge_data in graph.edges(keys=True, data=True):
+        source_node = graph.nodes[_source]
+        target_node = graph.nodes[_target]
         mid = Point(
             (float(source_node["lon"]) + float(target_node["lon"])) / 2,
             (float(source_node["lat"]) + float(target_node["lat"])) / 2,
         )
         edge_data["in_park"] = bool(park_area.intersects(mid))
     return graph
+
+
+def _load_park_geometries(
+    bbox: BBox,
+    *,
+    osm_xml: Path | None,
+):
+    tags = {"leisure": "park", "landuse": "forest"}
+    if osm_xml is not None:
+        try:
+            features = ox.features_from_xml(osm_xml, tags)
+            if features is not None and not features.empty:
+                return features.geometry.dropna().tolist()
+        except Exception:
+            pass
+    try:
+        features = ox.features_from_bbox(bbox, tags=tags)
+    except Exception:
+        return None
+    if features is None or features.empty:
+        return None
+    return features.geometry.dropna().tolist()
 
 
 def ensure_wgs84_coordinates(graph: nx.MultiDiGraph) -> nx.MultiDiGraph:
@@ -184,3 +227,18 @@ def normalize_graph(graph: nx.MultiDiGraph) -> nx.MultiDiGraph:
             edge_data["length_m"] = float(raw_length)
 
     return graph
+
+
+__all__ = [
+    "EXTRA_WAY_TAGS",
+    "OsmExtractError",
+    "annotate_park_edges",
+    "build_osm_graph",
+    "configure_osmnx_tags",
+    "ensure_wgs84_coordinates",
+    "graph_from_bbox",
+    "graph_from_bbox",
+    "graph_from_osm_xml",
+    "keep_ingest_edge",
+    "normalize_graph",
+]

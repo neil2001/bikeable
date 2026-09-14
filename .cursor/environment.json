@@ -10,7 +10,7 @@
     {
       "name": "frontend",
       "description": "Vite dev server on port 5173; proxies /api to the backend.",
-      "command": "cd frontend && API_PROXY_TARGET=http://127.0.0.1:8000 VITE_API_MODE=live VITE_DEFAULT_CITY_ID=fixture npm run dev -- --host 0.0.0.0 --port 5173"
+      "command": "cd frontend && API_PROXY_TARGET=http://127.0.0.1:8000 VITE_API_MODE=live npm run dev -- --host 0.0.0.0 --port 5173"
     }
   ],
   "ports": [

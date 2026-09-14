@@ -1,6 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
-  <key id="d7" for="edge" attr.name="maxspeed" attr.type="string" />
+  <key id="d8" for="edge" attr.name="maxspeed" attr.type="string" />
+  <key id="d7" for="edge" attr.name="osmid" attr.type="string" />
   <key id="d6" for="edge" attr.name="length_m" attr.type="string" />
   <key id="d5" for="edge" attr.name="highway" attr.type="string" />
   <key id="d4" for="node" attr.name="y" attr.type="string" />
@@ -36,44 +37,54 @@
     <edge source="1" target="2" id="0">
       <data key="d5">residential</data>
       <data key="d6">1000.0</data>
+      <data key="d7">101</data>
     </edge>
     <edge source="1" target="4" id="0">
       <data key="d5">residential</data>
       <data key="d6">1500.0</data>
+      <data key="d7">104</data>
     </edge>
     <edge source="1" target="3" id="0">
       <data key="d5">primary</data>
-      <data key="d7">45 mph</data>
+      <data key="d8">45 mph</data>
       <data key="d6">1700.0</data>
+      <data key="d7">105</data>
     </edge>
     <edge source="2" target="1" id="0">
       <data key="d5">residential</data>
       <data key="d6">1000.0</data>
+      <data key="d7">101</data>
     </edge>
     <edge source="2" target="3" id="0">
       <data key="d5">residential</data>
       <data key="d6">1000.0</data>
+      <data key="d7">102</data>
     </edge>
     <edge source="3" target="2" id="0">
       <data key="d5">residential</data>
       <data key="d6">1000.0</data>
+      <data key="d7">102</data>
     </edge>
     <edge source="3" target="4" id="0">
       <data key="d5">residential</data>
       <data key="d6">1414.0</data>
+      <data key="d7">103</data>
     </edge>
     <edge source="3" target="1" id="0">
       <data key="d5">primary</data>
-      <data key="d7">45 mph</data>
+      <data key="d8">45 mph</data>
       <data key="d6">1700.0</data>
+      <data key="d7">105</data>
     </edge>
     <edge source="4" target="3" id="0">
       <data key="d5">residential</data>
       <data key="d6">1414.0</data>
+      <data key="d7">103</data>
     </edge>
     <edge source="4" target="1" id="0">
       <data key="d5">residential</data>
       <data key="d6">1500.0</data>
+      <data key="d7">104</data>
     </edge>
     <data key="d0">EPSG:32610</data>
   </graph>

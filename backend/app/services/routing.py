@@ -7,21 +7,28 @@ from app.models.requests import (
     LoopRouteRequest,
     ManualRouteRequest,
     SegmentRouteRequest,
+    TraceExtendRequest,
 )
 from app.models.responses import (
     OptimizationMetadata,
     RouteResponse,
     RouteScoreBreakdown,
     SegmentRouteResponse,
+    TraceExtendResponse,
 )
 from app.optimization.loop import generate_loop
-from app.routing.ids import parse_road_id
+from app.routing.ids import make_road_id, parse_road_id
 from app.routing.metrics import (
+    RoadEdge,
     RouteMetrics,
     build_line_string,
+    build_line_string_from_edges,
     compute_route_metrics,
+    compute_route_metrics_from_edges,
 )
 from app.routing.point_to_point import RoutingError, route_point_to_point
+from app.routing.resolve import resolve_road_edges
+from app.routing.trace import extend_trace
 from app.services.city_graph import get_scored_graph
 from app.services.route_store import save_route
 
@@ -76,41 +83,83 @@ def route_from_roads(
     request: FromRoadsRequest, city_id: str = "fixture"
 ) -> RouteResponse:
     _graph, bike_graph = get_scored_graph(city_id, request.profile.value)
-    path = _path_from_road_ids(bike_graph, request.road_ids)
-    metrics = _metrics_with_elevation(bike_graph, path)
-    response = _metrics_to_route_response(
-        route_id=f"rt_{uuid.uuid4().hex[:12]}",
-        geometry=build_line_string(bike_graph, path),
-        metrics=metrics,
+    edges = _edges_from_road_ids(bike_graph, request.road_ids)
+    return _assemble_from_edges(bike_graph, edges)
+
+
+def route_trace_extend(
+    request: TraceExtendRequest, city_id: str = "fixture"
+) -> TraceExtendResponse:
+    _graph, bike_graph = get_scored_graph(city_id, request.profile.value)
+    selected = (
+        _edges_from_road_ids(bike_graph, request.selected_road_ids)
+        if request.selected_road_ids
+        else []
     )
-    save_route(response)
-    return response
+    clicked = _clicked_orientations(bike_graph, request.clicked_road_id)
+    result = extend_trace(
+        bike_graph,
+        selected,
+        clicked,
+        start=request.start,
+        preferences=request.preferences,
+        head_only=request.start is not None,
+    )
+    route = _assemble_from_edges(bike_graph, result.edges)
+    return TraceExtendResponse(
+        road_ids=[make_road_id(*edge) for edge in result.edges],
+        action=result.action,
+        route=route,
+    )
 
 
-def _path_from_road_ids(graph: nx.MultiDiGraph, road_ids: list[str]) -> list[int]:
-    path: list[int] = []
-    for index, road_id in enumerate(road_ids):
+def _clicked_orientations(graph: nx.MultiDiGraph, road_id: str) -> list[RoadEdge]:
+    try:
+        source, target, key = parse_road_id(road_id)
+    except ValueError as exc:
+        raise RoutingError("INVALID_REQUEST", str(exc)) from exc
+
+    found: list[RoadEdge] = []
+    seen: set[RoadEdge] = set()
+    for candidate_source, candidate_target, candidate_key in (
+        (source, target, key),
+        (target, source, key),
+    ):
+        try:
+            resolved = resolve_road_edges(
+                graph, candidate_source, candidate_target, candidate_key
+            )
+        except RoutingError:
+            continue
+        for edge in resolved:
+            if edge in seen:
+                continue
+            seen.add(edge)
+            found.append(edge)
+    if not found:
+        raise RoutingError(
+            "INVALID_REQUEST",
+            f"Road '{road_id}' was not found.",
+        )
+    return found
+
+
+def _edges_from_road_ids(graph: nx.MultiDiGraph, road_ids: list[str]) -> list[RoadEdge]:
+    edges: list[RoadEdge] = []
+    for road_id in road_ids:
         try:
             source, target, key = parse_road_id(road_id)
         except ValueError as exc:
             raise RoutingError("INVALID_REQUEST", str(exc)) from exc
 
-        if not graph.has_edge(source, target, key):
-            if not graph.has_edge(source, target):
+        for resolved in resolve_road_edges(graph, source, target, key):
+            if edges and resolved[0] != edges[-1][1]:
                 raise RoutingError(
                     "INVALID_REQUEST",
-                    f"Road '{road_id}' was not found.",
+                    "Selected roads do not form a connected path.",
                 )
-        if index == 0:
-            path.extend([source, target])
-            continue
-        if source != path[-1]:
-            raise RoutingError(
-                "INVALID_REQUEST",
-                "Selected roads do not form a connected path.",
-            )
-        path.append(target)
-    return path
+            edges.append(resolved)
+    return edges
 
 
 def route_loop(request: LoopRouteRequest, city_id: str = "fixture") -> RouteResponse:
@@ -132,6 +181,17 @@ def route_loop(request: LoopRouteRequest, city_id: str = "fixture") -> RouteResp
             candidates_evaluated=result.candidates_evaluated,
             candidates_rejected=result.candidates_rejected,
         ),
+    )
+    save_route(response)
+    return response
+
+
+def _assemble_from_edges(graph, edges: list[RoadEdge]) -> RouteResponse:
+    metrics = compute_route_metrics_from_edges(graph, edges)
+    response = _metrics_to_route_response(
+        route_id=f"rt_{uuid.uuid4().hex[:12]}",
+        geometry=build_line_string_from_edges(graph, edges),
+        metrics=metrics,
     )
     save_route(response)
     return response
@@ -179,4 +239,5 @@ __all__ = [
     "route_loop",
     "route_manual",
     "route_segment",
+    "route_trace_extend",
 ]
