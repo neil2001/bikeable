@@ -16,7 +16,7 @@ export function RoadInspector({ inspection, onClose }: Props) {
       <button type="button" className="close-button" onClick={onClose} aria-label="Close">
         <X size={16} strokeWidth={1.75} />
       </button>
-      <h2>Road</h2>
+      <h2>{inspection.features.name ?? "Road"}</h2>
       <p className="score-line">
         Bikeability <strong>{inspection.bikeability.score.toFixed(1)}</strong> / 10
       </p>

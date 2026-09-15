@@ -1,8 +1,8 @@
-import { Download, LocateFixed, Map as MapIcon, PenLine, Route, Settings } from "lucide-react";
+import { Download, LocateFixed, Map as MapIcon, Route, Settings } from "lucide-react";
 import type { PlannerMode } from "../hooks/usePlanner";
 import type { CitySummary, CyclingProfile } from "../types/api";
 
-export type PanelTab = "plan" | "trace" | "generate" | "settings";
+export type PanelTab = "plan" | "generate" | "settings";
 
 type Props = {
   tab: PanelTab;
@@ -24,11 +24,11 @@ type Props = {
   onGenerate: () => void;
   onLocate: () => void;
   onExport: () => void;
-  onUndoTrace: () => void;
-  onClearTrace: () => void;
+  onUndo: () => void;
+  onClear: () => void;
   hasRoute: boolean;
-  hasTraceSelection: boolean;
-  hasTraceOrigin?: boolean;
+  hasPlan: boolean;
+  canUndo: boolean;
 };
 
 export function RouteControls({
@@ -51,11 +51,11 @@ export function RouteControls({
   onGenerate,
   onLocate,
   onExport,
-  onUndoTrace,
-  onClearTrace,
+  onUndo,
+  onClear,
   hasRoute,
-  hasTraceSelection,
-  hasTraceOrigin = false,
+  hasPlan,
+  canUndo,
 }: Props) {
   return (
     <section className="controls">
@@ -70,17 +70,6 @@ export function RouteControls({
         >
           <MapIcon size={16} strokeWidth={1.75} />
           Plan
-        </button>
-        <button
-          type="button"
-          className={tab === "trace" ? "active" : ""}
-          onClick={() => {
-            setMode("trace");
-            onTabChange("trace");
-          }}
-        >
-          <PenLine size={16} strokeWidth={1.75} />
-          Trace
         </button>
         <button
           type="button"
@@ -171,34 +160,31 @@ export function RouteControls({
                 Generate route
               </button>
             </>
-          ) : mode === "trace" ? (
+          ) : (
             <>
               <p className="hint">
-                {hasTraceOrigin
-                  ? "Tap a road to ride there from your location."
-                  : "Tap a road to start. Tap further on the same road to fill it, or tap another road to ride there."}
+                Click a road to follow it. Stay on the same street to trace along it, or click a new
+                street to ride there. Click empty map to drop a stop.
               </p>
               <div className="btn-row">
                 <button
                   type="button"
                   className="secondary"
-                  onClick={onUndoTrace}
-                  disabled={!hasTraceSelection || loading}
+                  onClick={onUndo}
+                  disabled={!canUndo || loading}
                 >
                   Undo last
                 </button>
                 <button
                   type="button"
                   className="secondary"
-                  onClick={onClearTrace}
-                  disabled={!hasTraceSelection || loading}
+                  onClick={onClear}
+                  disabled={!hasPlan || loading}
                 >
                   Clear
                 </button>
               </div>
             </>
-          ) : (
-            <p className="hint">Click the map to add numbered waypoints.</p>
           )}
           <div className="btn-row">
             <button type="button" className="secondary" onClick={onLocate}>

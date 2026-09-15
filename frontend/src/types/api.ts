@@ -58,6 +58,7 @@ export type RouteResponse = {
   profile: RouteProfileSample[];
   scoreBreakdown?: RouteScoreBreakdown;
   optimization?: OptimizationMetadata;
+  roadIds?: string[] | null;
 };
 
 export type SegmentRouteResponse = {
@@ -95,7 +96,8 @@ export type FromRoadsRequest = {
 
 export type TraceExtendRequest = {
   selectedRoadIds: string[];
-  clickedRoadId: string;
+  clickedRoadId?: string | null;
+  clicked?: Coordinate | null;
   start?: Coordinate | null;
   profile: CyclingProfile;
   preferences: RoutePreferences;
@@ -107,6 +109,7 @@ export type TraceExtendResponse = {
   roadIds: string[];
   action: TraceExtendAction;
   route: RouteResponse;
+  destinationName?: string | null;
 };
 
 export type HealthResponse = {
@@ -157,6 +160,7 @@ export type RoadInspectionResponse = {
     speedKph?: number | null;
     lanes?: number | null;
     surface?: string | null;
+    name?: string | null;
     osmid?: number | number[] | null;
     protectedBikeInfrastructure: boolean;
     bikeLane: boolean;
