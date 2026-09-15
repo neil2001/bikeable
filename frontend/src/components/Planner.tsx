@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, LoaderCircle } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getDefaultCityId } from "../api/client";
 import { usePlanner } from "../hooks/usePlanner";
 import { MapView } from "../map/MapView";
@@ -8,6 +8,7 @@ import { RoadInspector } from "./RoadInspector";
 import { RouteCharts } from "./RouteCharts";
 import { RouteControls, type PanelTab } from "./RouteControls";
 import { RouteSummary } from "./RouteSummary";
+import { WaypointList } from "./WaypointList";
 
 const DEFAULT_CENTER = { lat: 49.2827, lon: -123.1207 };
 
@@ -20,17 +21,35 @@ export function Planner() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [panelTab, setPanelTab] = useState<PanelTab>("plan");
 
-  const mapCenter = planner.start ?? planner.waypoints[0] ?? DEFAULT_CENTER;
+  const mapCenter = planner.start ?? planner.waypoints[0]?.coordinate ?? DEFAULT_CENTER;
   const routeCoordinates = useMemo(() => {
     if (planner.route) {
       return [planner.route.geometry.coordinates];
     }
-    return planner.segmentGeometries;
-  }, [planner.route, planner.segmentGeometries]);
+    return [];
+  }, [planner.route]);
 
   const cityName =
     planner.selectedCity?.name ??
     (getDefaultCityId() === "fixture" ? "Fixture Network" : "Vancouver metro");
+
+  const undoPlan = planner.undoPlan;
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const modifier = event.metaKey || event.ctrlKey;
+      if (modifier && event.key.toLowerCase() === "z" && !event.shiftKey) {
+        const target = event.target as HTMLElement | null;
+        if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) {
+          return;
+        }
+        event.preventDefault();
+        undoPlan();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [undoPlan]);
 
   return (
     <div className="planner-app">
@@ -49,6 +68,7 @@ export function Planner() {
           routeCoordinates={routeCoordinates}
           waypoints={planner.waypoints}
           selectedRoadIds={planner.selectedRoadIds}
+          selectedWaypointId={planner.selectedWaypointId}
           start={planner.start}
           mode={planner.mode}
           showHeatmap={showHeatmap}
@@ -58,8 +78,8 @@ export function Planner() {
           onMapClick={planner.addWaypoint}
           onRoadClick={planner.handleRoadClick}
           onMoveWaypoint={planner.moveWaypoint}
-          onRemoveWaypoint={planner.removeWaypoint}
           onMoveStart={planner.setStart}
+          onSelectWaypoint={planner.setSelectedWaypointId}
           onHeatmapLoadingChange={planner.setHeatmapLoading}
           onHeatmapError={planner.setHeatmapError}
           cursorDistanceM={planner.cursorDistanceM}
@@ -81,10 +101,8 @@ export function Planner() {
         </div>
         <p className="subtitle">
           {planner.mode === "manual"
-            ? "Click to drop a waypoint. Drag the map to pan."
-            : planner.mode === "trace"
-              ? "Tap a road to start, skip ahead on the same street, or jump to another."
-              : "Click a start, then generate a loop."}
+            ? "Click a road to follow it, or drop a stop on the map."
+            : "Click a start, then generate a loop."}
         </p>
       </header>
 
@@ -132,12 +150,22 @@ export function Planner() {
           onGenerate={() => void planner.generateAutoRoute()}
           onLocate={planner.useCurrentLocation}
           onExport={() => void planner.exportRoute()}
-          onUndoTrace={planner.undoTrace}
-          onClearTrace={planner.clearTrace}
+          onUndo={planner.undoPlan}
+          onClear={planner.clearPlan}
           hasRoute={Boolean(planner.route)}
-          hasTraceSelection={planner.selectedRoadIds.length > 0}
-          hasTraceOrigin={Boolean(planner.start)}
+          hasPlan={planner.waypoints.length > 0 || planner.selectedRoadIds.length > 0}
+          canUndo={planner.canUndo}
         />
+
+        {planner.mode === "manual" ? (
+          <WaypointList
+            waypoints={planner.waypoints}
+            selectedWaypointId={planner.selectedWaypointId}
+            onSelect={planner.setSelectedWaypointId}
+            onRemove={planner.removeWaypoint}
+            onReorder={planner.reorderPlanWaypoints}
+          />
+        ) : null}
 
         <RouteSummary route={planner.route} />
 

@@ -49,6 +49,7 @@ def test_inspect_expands_dropped_skip_edge() -> None:
     inspection = inspect_road(scored, "10:30:0", CyclingProfile.ROAD)
     assert len(inspection.geometry.coordinates) >= 3
     assert inspection.road_id == "10:20:0"
+    assert inspection.features.name == "Northwest Marine Drive"
 
 
 def test_road_inspection_returns_score_components() -> None:

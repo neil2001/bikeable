@@ -8,6 +8,7 @@ import networkx as nx
 from app.models.common import Coordinate, RoutePreferences
 from app.routing.cost import edge_routing_cost
 from app.routing.metrics import RoadEdge
+from app.routing.names import edge_display_name
 from app.routing.nearest import nearest_node
 from app.routing.point_to_point import RoutingError
 
@@ -21,6 +22,7 @@ CostFn = Callable[[dict], float]
 class TraceExtendResult:
     edges: list[RoadEdge]
     action: TraceAction
+    destination_name: str | None = None
 
 
 def extend_trace(
@@ -30,84 +32,88 @@ def extend_trace(
     *,
     start: Coordinate | None,
     preferences: RoutePreferences,
-    head_only: bool,
+    destination: Coordinate | None = None,
 ) -> TraceExtendResult:
-    if not clicked_orientations:
-        raise RoutingError("INVALID_REQUEST", "Clicked road was not found.")
-
-    unique_clicked = _unique_edges(clicked_orientations)
     blocked = set(selected)
 
-    if not selected:
-        return _extend_from_origin(
+    if clicked_orientations:
+        unique_clicked = _unique_edges(clicked_orientations)
+        if not selected:
+            result = _extend_from_origin(
+                graph,
+                unique_clicked,
+                start=start,
+                preferences=preferences,
+                blocked=blocked,
+            )
+            return _with_destination_name(graph, result, unique_clicked)
+
+        result = _extend_from_head(
             graph,
+            selected,
             unique_clicked,
-            start=start,
             preferences=preferences,
             blocked=blocked,
         )
+        return _with_destination_name(graph, result, unique_clicked)
 
+    if destination is None:
+        raise RoutingError("INVALID_REQUEST", "Clicked road was not found.")
+
+    result = _extend_to_coordinate(
+        graph,
+        selected,
+        destination,
+        start=start,
+        preferences=preferences,
+        blocked=blocked,
+    )
+    return _with_destination_name(graph, result, [])
+
+
+def _extend_from_head(
+    graph: nx.MultiDiGraph,
+    selected: list[RoadEdge],
+    clicked: list[RoadEdge],
+    *,
+    preferences: RoutePreferences,
+    blocked: set[RoadEdge],
+) -> TraceExtendResult:
     head_edge = selected[-1]
-    tail_edge = selected[0]
     head_node = head_edge[1]
-    tail_node = tail_edge[0]
 
-    ends: list[tuple[str, int, RoadEdge]] = [("append", head_node, head_edge)]
-    if not head_only:
-        ends.append(("prepend", tail_node, tail_edge))
-
-    same_road_candidates: list[tuple[float, str, list[RoadEdge]]] = []
-    for side, node, end_edge in ends:
-        if not _same_road(graph, end_edge, unique_clicked):
-            continue
+    if _same_road(graph, head_edge, clicked):
         connector = _same_road_connector(
             graph,
-            from_node=node,
-            side=side,
-            clicked=unique_clicked,
+            from_node=head_node,
+            clicked=clicked,
             blocked=blocked,
-            reference=end_edge,
+            reference=head_edge,
         )
-        if connector is None:
-            continue
-        same_road_candidates.append((_edges_length(graph, connector), side, connector))
+        if connector is not None:
+            return TraceExtendResult(
+                edges=[*selected, *connector],
+                action=_action_for(connector, clicked, used_same_road=True),
+            )
 
-    if same_road_candidates:
-        _cost, side, connector = min(same_road_candidates, key=lambda item: item[0])
-        return TraceExtendResult(
-            edges=_join(selected, connector, side),
-            action=_action_for(connector, unique_clicked, used_same_road=True),
-        )
-
-    route_candidates: list[tuple[float, str, list[RoadEdge]]] = []
     routing_weight = _routing_weight_fn(preferences, blocked)
     routing_cost_fn = _routing_cost_fn(preferences)
-    for side, node, _end_edge in ends:
-        connector = _connector_via_shortest_path(
-            graph,
-            from_node=node,
-            side=side,
-            clicked=unique_clicked,
-            blocked=blocked,
-            weight=routing_weight,
-            cost_fn=routing_cost_fn,
-        )
-        if connector is None:
-            continue
-        route_candidates.append(
-            (_edges_cost(graph, connector, routing_cost_fn), side, connector)
-        )
-
-    if not route_candidates:
+    connector = _connector_via_shortest_path(
+        graph,
+        from_node=head_node,
+        clicked=clicked,
+        blocked=blocked,
+        weight=routing_weight,
+        cost_fn=routing_cost_fn,
+    )
+    if connector is None:
         raise RoutingError(
             "ROUTE_NOT_FOUND",
             "No valid cycling route could be constructed.",
         )
-
-    _cost, side, connector = min(route_candidates, key=lambda item: item[0])
     return TraceExtendResult(
-        edges=_join(selected, connector, side),
-        action=_action_for(connector, unique_clicked, used_same_road=False),
+        edges=[*selected, *connector],
+        action=_action_for(connector, clicked, used_same_road=False),
     )
 
 
@@ -131,16 +137,13 @@ def _extend_from_origin(
         ) from exc
 
     for orientation in clicked:
-        source, target, _key = orientation
+        source, _target, _key = orientation
         if start_node == source:
-            return TraceExtendResult(edges=[orientation], action="select")
-        if start_node == target:
             return TraceExtendResult(edges=[orientation], action="select")
 
     connector = _connector_via_shortest_path(
         graph,
         from_node=start_node,
-        side="append",
         clicked=clicked,
         blocked=blocked,
         weight=_routing_weight_fn(preferences, blocked),
@@ -157,11 +160,74 @@ def _extend_from_origin(
     )
 
 
+def _extend_to_coordinate(
+    graph: nx.MultiDiGraph,
+    selected: list[RoadEdge],
+    destination: Coordinate,
+    *,
+    start: Coordinate | None,
+    preferences: RoutePreferences,
+    blocked: set[RoadEdge],
+) -> TraceExtendResult:
+    try:
+        dest_node = nearest_node(graph, destination)
+    except ValueError as exc:
+        raise RoutingError(
+            "INVALID_COORDINATES",
+            "Could not resolve start or end to the street network.",
+        ) from exc
+
+    if selected:
+        from_node = selected[-1][1]
+    elif start is not None:
+        try:
+            from_node = nearest_node(graph, start)
+        except ValueError as exc:
+            raise RoutingError(
+                "INVALID_COORDINATES",
+                "Could not resolve start or end to the street network.",
+            ) from exc
+    else:
+        raise RoutingError(
+            "INVALID_REQUEST",
+            "Choose a start location first.",
+        )
+
+    if from_node == dest_node:
+        if selected:
+            return TraceExtendResult(edges=selected, action="select")
+        raise RoutingError(
+            "INVALID_REQUEST",
+            "Choose a different destination.",
+        )
+
+    routing_weight = _routing_weight_fn(preferences, blocked)
+    routing_cost_fn = _routing_cost_fn(preferences)
+    try:
+        nodes = nx.shortest_path(graph, from_node, dest_node, weight=routing_weight)
+    except (nx.NetworkXNoPath, nx.NodeNotFound) as exc:
+        raise RoutingError(
+            "ROUTE_NOT_FOUND",
+            "No valid cycling route could be constructed.",
+        ) from exc
+    connector = _nodes_to_edges(
+        graph, nodes, cost_fn=routing_cost_fn, blocked=blocked
+    )
+    if _has_blocked(connector, blocked):
+        raise RoutingError(
+            "ROUTE_NOT_FOUND",
+            "No valid cycling route could be constructed.",
+        )
+    return TraceExtendResult(
+        edges=[*selected, *connector],
+        action="route",
+    )
+
+
 def _same_road_connector(
     graph: nx.MultiDiGraph,
     *,
     from_node: int,
-    side: str,
     clicked: list[RoadEdge],
     blocked: set[RoadEdge],
     reference: RoadEdge,
@@ -183,7 +249,6 @@ def _same_road_connector(
     return _connector_via_shortest_path(
         subgraph,
         from_node=from_node,
-        side=side,
         clicked=clicked,
         blocked=blocked,
         weight=_length_weight_fn(blocked),
@@ -195,7 +260,6 @@ def _connector_via_shortest_path(
     graph: nx.MultiDiGraph,
     *,
     from_node: int,
-    side: str,
     clicked: list[RoadEdge],
     blocked: set[RoadEdge],
     weight,
@@ -204,32 +268,19 @@ def _connector_via_shortest_path(
     best: list[RoadEdge] | None = None
     best_cost = _INF
     for orientation in clicked:
-        source, target, _key = orientation
-        if side == "append":
-            entry = source
-            if from_node == entry:
-                candidate = [orientation]
-            else:
-                try:
-                    nodes = nx.shortest_path(graph, from_node, entry, weight=weight)
-                except (nx.NetworkXNoPath, nx.NodeNotFound):
-                    continue
-                prefix = _nodes_to_edges(graph, nodes, cost_fn=cost_fn, blocked=blocked)
-                if prefix[-1:] == [orientation]:
-                    candidate = prefix
-                else:
-                    candidate = prefix + [orientation]
+        source, _target, _key = orientation
+        if from_node == source:
+            candidate = [orientation]
         else:
-            exit_node = target
-            if from_node == exit_node:
-                candidate = [orientation]
+            try:
+                nodes = nx.shortest_path(graph, from_node, source, weight=weight)
+            except (nx.NetworkXNoPath, nx.NodeNotFound):
+                continue
+            prefix = _nodes_to_edges(graph, nodes, cost_fn=cost_fn, blocked=blocked)
+            if prefix[-1:] == [orientation]:
+                candidate = prefix
             else:
-                try:
-                    nodes = nx.shortest_path(graph, exit_node, from_node, weight=weight)
-                except (nx.NetworkXNoPath, nx.NodeNotFound):
-                    continue
-                suffix = _nodes_to_edges(graph, nodes, cost_fn=cost_fn, blocked=blocked)
-                candidate = [orientation] + suffix
+                candidate = prefix + [orientation]
         if _has_blocked(candidate, blocked):
             continue
         cost = sum(cost_fn(graph.edges[edge]) for edge in candidate)
@@ -371,24 +422,6 @@ def _length_m(data: dict) -> float:
     return float(data.get("length_m", data.get("length", 1.0)))
 
 
-def _edges_length(graph: nx.MultiDiGraph, edges: list[RoadEdge]) -> float:
-    return sum(_length_m(graph.edges[edge]) for edge in edges)
-
-
-def _edges_cost(
-    graph: nx.MultiDiGraph, edges: list[RoadEdge], cost_fn: CostFn
-) -> float:
-    return sum(cost_fn(graph.edges[edge]) for edge in edges)
-
-
-def _join(
-    selected: list[RoadEdge], connector: list[RoadEdge], side: str
-) -> list[RoadEdge]:
-    if side == "prepend":
-        return [*connector, *selected]
-    return [*selected, *connector]
-
-
 def _action_for(
     connector: list[RoadEdge],
     clicked: list[RoadEdge],
@@ -415,3 +448,20 @@ def _unique_edges(edges: list[RoadEdge]) -> list[RoadEdge]:
 
 def _has_blocked(edges: list[RoadEdge], blocked: set[RoadEdge]) -> bool:
     return any(edge in blocked for edge in edges)
+
+
+def _with_destination_name(
+    graph: nx.MultiDiGraph,
+    result: TraceExtendResult,
+    clicked: list[RoadEdge],
+) -> TraceExtendResult:
+    name = None
+    for edge in reversed(clicked or result.edges):
+        name = edge_display_name(graph.edges[edge])
+        if name:
+            break
+    return TraceExtendResult(
+        edges=result.edges,
+        action=result.action,
+        destination_name=name,
+    )

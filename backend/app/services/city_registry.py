@@ -39,11 +39,12 @@ CITY_SUMMARIES = {
 
 
 def list_city_summaries() -> list[CitySummary]:
-    return [
-        city
-        for city in CITY_SUMMARIES.values()
-        if city.city_id != "fixture"
+    real_cities = [
+        city for city in CITY_SUMMARIES.values() if city.city_id != "fixture"
     ]
+    if any(city_graph_is_available(city.city_id) for city in real_cities):
+        return real_cities
+    return [FIXTURE, *real_cities]
 
 
 def get_city_summary(city_id: str) -> CitySummary:

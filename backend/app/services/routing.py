@@ -25,6 +25,7 @@ from app.routing.metrics import (
     build_line_string_from_edges,
     compute_route_metrics,
     compute_route_metrics_from_edges,
+    node_path_to_edges,
 )
 from app.routing.point_to_point import RoutingError, route_point_to_point
 from app.routing.resolve import resolve_road_edges
@@ -70,10 +71,12 @@ def route_manual(
             full_path.extend(segment_path)
 
     metrics = _metrics_with_elevation(bike_graph, full_path)
+    edges = node_path_to_edges(bike_graph, full_path)
     response = _metrics_to_route_response(
         route_id=f"rt_{uuid.uuid4().hex[:12]}",
         geometry=build_line_string(bike_graph, full_path),
         metrics=metrics,
+        road_ids=[make_road_id(*edge) for edge in edges],
     )
     save_route(response)
     return response
@@ -96,20 +99,25 @@ def route_trace_extend(
         if request.selected_road_ids
         else []
     )
-    clicked = _clicked_orientations(bike_graph, request.clicked_road_id)
+    clicked = (
+        _clicked_orientations(bike_graph, request.clicked_road_id)
+        if request.clicked_road_id
+        else []
+    )
     result = extend_trace(
         bike_graph,
         selected,
         clicked,
         start=request.start,
         preferences=request.preferences,
-        head_only=request.start is not None,
+        destination=request.clicked,
     )
     route = _assemble_from_edges(bike_graph, result.edges)
     return TraceExtendResponse(
         road_ids=[make_road_id(*edge) for edge in result.edges],
         action=result.action,
         route=route,
+        destination_name=result.destination_name,
     )
 
 
@@ -192,6 +200,7 @@ def _assemble_from_edges(graph, edges: list[RoadEdge]) -> RouteResponse:
         route_id=f"rt_{uuid.uuid4().hex[:12]}",
         geometry=build_line_string_from_edges(graph, edges),
         metrics=metrics,
+        road_ids=[make_road_id(*edge) for edge in edges],
     )
     save_route(response)
     return response
@@ -208,6 +217,7 @@ def _metrics_to_route_response(
     geometry,
     metrics,
     optimization: OptimizationMetadata | None = None,
+    road_ids: list[str] | None = None,
 ) -> RouteResponse:
     return RouteResponse(
         route_id=route_id,
@@ -230,6 +240,7 @@ def _metrics_to_route_response(
             distance_penalty=0.0,
         ),
         optimization=optimization,
+        road_ids=road_ids,
     )
 
 

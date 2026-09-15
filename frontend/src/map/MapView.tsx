@@ -3,9 +3,9 @@ import type { FilterSpecification, LngLatBoundsLike, LngLatLike, Map, MapMouseEv
 import { useEffect, useRef, useState } from "react";
 import { getBikeabilityNetwork } from "../api/client";
 import { ApiClientError } from "../api/errors";
+import type { Waypoint } from "../hooks/usePlanner";
 import type { Coordinate, CyclingProfile } from "../types/api";
 import { BIKEABILITY_STOPS, ROUTE_CASING, ROUTE_COLOR } from "./colors";
-import { createLucideX } from "./icons";
 import { OPENFREEMAP_POSITRON_STYLE } from "./styles";
 import { highlightRoadIds } from "./tracePath";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -16,19 +16,20 @@ type Props = {
   heatmapCityId: string;
   heatmapProfile: CyclingProfile;
   routeCoordinates: [number, number][][];
-  waypoints: Coordinate[];
+  waypoints: Waypoint[];
   selectedRoadIds?: string[];
+  selectedWaypointId?: string | null;
   start?: Coordinate | null;
-  mode?: "manual" | "auto" | "trace";
+  mode?: "manual" | "auto";
   showHeatmap?: boolean;
   heatmapOpacity?: number;
   bikeabilityMin?: number;
   bikeabilityMax?: number;
   onMapClick: (coordinate: Coordinate) => void;
-  onRoadClick: (roadIds: string[]) => void;
+  onRoadClick: (roadIds: string[], coordinate: Coordinate) => void;
   onMoveWaypoint?: (index: number, coordinate: Coordinate) => void;
-  onRemoveWaypoint?: (index: number) => void;
   onMoveStart?: (coordinate: Coordinate) => void;
+  onSelectWaypoint?: (id: string) => void;
   onHeatmapLoadingChange?: (loading: boolean) => void;
   onHeatmapError?: (message: string | null) => void;
   cursorDistanceM: number | null;
@@ -142,11 +143,15 @@ function bikeabilityFilter(min: number, max: number): FilterSpecification {
   ];
 }
 
-function createWaypointElement(label: string, title: string, isStart: boolean) {
+function createWaypointElement(label: string, title: string, isStart: boolean, selected: boolean) {
   const container = document.createElement("div");
-  container.className = isStart
-    ? "waypoint-marker-container start-marker"
-    : "waypoint-marker-container";
+  container.className = [
+    "waypoint-marker-container",
+    isStart ? "start-marker" : "",
+    selected ? "selected" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   const inner = document.createElement("div");
   inner.className = "waypoint-marker-inner";
@@ -169,6 +174,7 @@ export function MapView({
   routeCoordinates,
   waypoints,
   selectedRoadIds = [],
+  selectedWaypointId = null,
   start,
   mode = "manual",
   showHeatmap = true,
@@ -178,8 +184,8 @@ export function MapView({
   onMapClick,
   onRoadClick,
   onMoveWaypoint,
-  onRemoveWaypoint,
   onMoveStart,
+  onSelectWaypoint,
   onHeatmapLoadingChange,
   onHeatmapError,
 }: Props) {
@@ -191,6 +197,7 @@ export function MapView({
   const lastFitRouteKeyRef = useRef<string>("");
   const lastCityRef = useRef<string>("");
   const lastStartFlyRef = useRef<string>("");
+  const lastSelectedFlyRef = useRef<string>("");
   const pointerDownRef = useRef<{ x: number; y: number } | null>(null);
   const dragOccurredRef = useRef(false);
   const suppressClickRef = useRef(false);
@@ -336,20 +343,17 @@ export function MapView({
           ),
         ];
         if (roadIds.length > 0) {
-          onRoadClickRef.current(roadIds);
-          if (modeRef.current === "trace") {
+          onRoadClickRef.current(roadIds, { lat: event.lngLat.lat, lon: event.lngLat.lng });
+          if (modeRef.current !== "auto") {
             return;
           }
         }
-      }
-      if (modeRef.current === "trace") {
-        return;
       }
       onMapClickRef.current({ lat: event.lngLat.lat, lon: event.lngLat.lng });
     });
 
     map.on("mouseenter", ROAD_LAYER, () => {
-      if (modeRef.current === "trace") {
+      if (modeRef.current !== "auto") {
         map.getCanvas().style.cursor = "pointer";
       }
     });
@@ -467,9 +471,8 @@ export function MapView({
 
     const allCoords = routeCoordinates.flat();
     if (allCoords.length >= 2) {
-      const routeKey = `${allCoords.length}:${allCoords[0][0]}:${allCoords[allCoords.length - 1][0]}`;
-      if (routeKey !== lastFitRouteKeyRef.current) {
-        lastFitRouteKeyRef.current = routeKey;
+      if (!lastFitRouteKeyRef.current) {
+        lastFitRouteKeyRef.current = "fitted";
 
         let minLon = Infinity;
         let minLat = Infinity;
@@ -518,8 +521,8 @@ export function MapView({
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !readyRef.current || mode !== "trace" || !start) {
-      if (mode !== "trace") {
+    if (!map || !readyRef.current || mode !== "auto" || !start) {
+      if (mode !== "auto") {
         lastStartFlyRef.current = "";
       }
       return;
@@ -538,6 +541,26 @@ export function MapView({
 
   useEffect(() => {
     const map = mapRef.current;
+    if (!map || !readyRef.current || !selectedWaypointId) {
+      return;
+    }
+    if (selectedWaypointId === lastSelectedFlyRef.current) {
+      return;
+    }
+    const waypoint = waypoints.find((item) => item.id === selectedWaypointId);
+    if (!waypoint) {
+      return;
+    }
+    lastSelectedFlyRef.current = selectedWaypointId;
+    map.flyTo({
+      center: [waypoint.coordinate.lon, waypoint.coordinate.lat] as LngLatLike,
+      zoom: Math.max(map.getZoom(), 15),
+      duration: 600,
+    });
+  }, [selectedWaypointId, waypoints, mapReady]);
+
+  useEffect(() => {
+    const map = mapRef.current;
     if (!map) {
       return;
     }
@@ -549,23 +572,8 @@ export function MapView({
       suppressClickRef.current = true;
     };
 
-    if (mode === "trace") {
-      if (start) {
-        const { container } = createWaypointElement("S", "Start location", true);
-        const marker = new maplibregl.Marker({
-          element: container,
-          anchor: "center",
-          draggable: false,
-        })
-          .setLngLat([start.lon, start.lat] as LngLatLike)
-          .addTo(map);
-        markersRef.current.push(marker);
-      }
-      return;
-    }
-
     if (mode === "auto" && start) {
-      const { container } = createWaypointElement("S", "Start location (drag to reposition)", true);
+      const { container } = createWaypointElement("S", "Start location (drag to reposition)", true, false);
 
       const marker = new maplibregl.Marker({
         element: container,
@@ -587,41 +595,26 @@ export function MapView({
     }
 
     waypoints.forEach((waypoint, index) => {
-      const { container, inner } = createWaypointElement(
+      const selected = waypoint.id === selectedWaypointId;
+      const { container } = createWaypointElement(
         String(index + 1),
-        `Waypoint ${index + 1} (drag to reposition)`,
-        false,
+        `${waypoint.label} (drag to reposition)`,
+        index === 0,
+        selected,
       );
-
-      if (onRemoveWaypoint) {
-        const removeBtn = document.createElement("button");
-        removeBtn.className = "waypoint-remove-btn";
-        removeBtn.type = "button";
-        removeBtn.title = `Delete waypoint ${index + 1}`;
-        removeBtn.setAttribute("aria-label", `Delete waypoint ${index + 1}`);
-        removeBtn.appendChild(createLucideX(12));
-        const stopAndRemove = (event: Event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          onRemoveWaypoint(index);
-        };
-        removeBtn.addEventListener("click", stopAndRemove);
-        removeBtn.addEventListener("mousedown", (event) => {
-          event.stopPropagation();
-        });
-        removeBtn.addEventListener("touchstart", (event) => {
-          event.stopPropagation();
-        });
-        inner.appendChild(removeBtn);
-      }
 
       const marker = new maplibregl.Marker({
         element: container,
         anchor: "center",
         draggable: Boolean(onMoveWaypoint),
       })
-        .setLngLat([waypoint.lon, waypoint.lat] as LngLatLike)
+        .setLngLat([waypoint.coordinate.lon, waypoint.coordinate.lat] as LngLatLike)
         .addTo(map);
+
+      container.addEventListener("click", (event) => {
+        event.stopPropagation();
+        onSelectWaypoint?.(waypoint.id);
+      });
 
       if (onMoveWaypoint) {
         marker.on("dragstart", suppressFollowingClick);
@@ -634,7 +627,7 @@ export function MapView({
 
       markersRef.current.push(marker);
     });
-  }, [waypoints, start, mode, mapReady, onMoveWaypoint, onRemoveWaypoint, onMoveStart]);
+  }, [waypoints, start, mode, mapReady, selectedWaypointId, onMoveWaypoint, onMoveStart, onSelectWaypoint]);
 
   return <div ref={containerRef} className="map-container" aria-label="Route map" />;
 }

@@ -10,13 +10,25 @@ def test_health_ok() -> None:
     assert response.json() == {"status": "ok"}
 
 
-def test_list_cities_hides_fixture() -> None:
+def test_list_cities_includes_fixture_when_no_real_graph() -> None:
     response = client.get("/api/v1/cities")
     assert response.status_code == 200
     payload = response.json()
     city_ids = {city["cityId"] for city in payload["cities"]}
-    assert "fixture" not in city_ids
     assert "vancouver" in city_ids
+    assert "fixture" in city_ids
+
+
+def test_list_cities_hides_fixture_when_real_graph_exists(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.services.city_registry.city_graph_is_available",
+        lambda city_id: city_id == "vancouver",
+    )
+    response = client.get("/api/v1/cities")
+    assert response.status_code == 200
+    city_ids = {city["cityId"] for city in response.json()["cities"]}
+    assert "vancouver" in city_ids
+    assert "fixture" not in city_ids
 
 
 def test_unknown_city_returns_stable_error_code() -> None:

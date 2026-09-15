@@ -25,7 +25,8 @@ frontend/src/
 ├── App.tsx                  Renders <Planner />
 ├── api/                     Fetch wrappers, error envelope, optional mocks
 ├── components/              Planner shell, controls, summary, charts, inspector, legend
-├── hooks/usePlanner.ts      Modes, waypoints, trace steps, API calls
+├── hooks/usePlanner.ts      Modes, waypoints, selected roads, API calls
+├── planner/                 Waypoint helpers for the unified Plan mode
 ├── map/                     MapLibre view, style, colors, trace helpers
 └── types/api.ts             CamelCase types matching the backend
 ```
@@ -50,7 +51,7 @@ Env:
 
 Docker Compose sets `API_PROXY_TARGET=http://backend:8000` and `VITE_API_MODE=live`.
 
-Mock mode only covers health, cities, bikeability overlay, and loop generation. Plan routing, Trace, road inspect, and GPX still hit the network.
+Mock mode only covers health, cities, bikeability overlay, and loop generation. Plan routing, road inspect, and GPX still hit the network.
 
 ## API client
 
@@ -63,8 +64,8 @@ Mock mode only covers health, cities, bikeability overlay, and loop generation. 
 | `getBikeabilityNetwork` | `GET /api/v1/cities/{id}/bikeability` |
 | `inspectRoad` | `GET /api/v1/roads/{id}` |
 | `routeSegment` / `routeManual` | Plan-mode routing |
-| `routeFromRoads` | Rebuild a Trace path from `roadIds` |
-| `traceExtend` | Grow a Trace selection |
+| `routeFromRoads` | Rebuild a path from `roadIds` |
+| `traceExtend` | Grow a Plan selection |
 | `generateLoop` | Auto loop |
 | `downloadGpx` | GPX blob |
 
@@ -72,27 +73,24 @@ Failures parse `{ error: { code, message, details } }` into `ApiClientError` ([`
 
 ## Planner modes
 
-[`usePlanner`](../frontend/src/hooks/usePlanner.ts) modes: `manual` | `trace` | `auto`. The panel tabs Plan / Trace / Generate / Settings map onto those (`Settings` does not change mode).
+[`usePlanner`](../frontend/src/hooks/usePlanner.ts) modes: `manual` | `auto`. The panel tabs Plan / Generate / Settings map onto those (`Settings` does not change mode).
 
 Shared state: city, cycling profile (`road` | `commuter` | `leisure`), bikeability vs distance weight (default 80% bikeable), target loop distance (default 30 mi), current `RouteResponse`, loading/error, road inspection.
 
-Switching mode or city clears the route, trace steps, and (when leaving Plan) waypoints.
+Switching mode or city clears the route, selected roads, and waypoints.
 
 ### Plan (`manual`)
 
-Map click appends a numbered waypoint. With two or more points the hook calls `routeSegment` for each consecutive pair (preview geometry) then `routeManual` for full metrics. Waypoint markers are draggable; moves are debounced 350 ms. Remove uses the marker’s × button.
-
-### Trace (`trace`)
-
-Clicks on heatmap roads, not empty map. Flow:
+One workflow that used to be split across Plan and Trace. Clicks always grow the route **forward** from the current end:
 
 1. Hit-test overlay features (12 px box so hairline roads register).
-2. Inspect the clicked `roadId`.
-3. [`detectTraceClick`](../frontend/src/map/tracePath.ts) decides undo-last, undo-first, ignore (middle of path), or extend.
-4. Extend calls `POST /routes/trace-extend`. The client stores steps via `applyTraceExtension` and shows the returned route.
-5. Undo last / Clear rebuild with `routeFromRoads` (or empty the path).
+2. Inspect the clicked `roadId` (street name feeds the stop list).
+3. [`detectTraceClick`](../frontend/src/map/tracePath.ts) decides undo-last (click the last segment), ignore (middle of path), or extend.
+4. Extend calls `POST /routes/trace-extend` with the clicked road. Same-name streets skip ahead along the corridor; a new street gets a bikeable connector, then that street.
+5. Empty-map clicks drop a start (first click) or extend to that coordinate.
+6. Stops are small numbered map pins plus a sidebar list (delete, drag to reorder, click to focus). Dragging a pin reroutes between remaining stops. Undo last / Clear restore prior snapshots.
 
-Overlay features are **undirected** (one LineString per two-way street). Directed ids `source:target:key` are recovered by trying the clicked id and its reverse (`highlightRoadIds`). Empty-map clicks do nothing. An optional start pin can be set (geolocation or Generate-style start) so Trace grows from that end.
+Overlay features are **undirected** (one LineString per two-way street). Directed ids `source:target:key` are recovered by trying the clicked id and its reverse (`highlightRoadIds`).
 
 ### Generate (`auto`)
 
@@ -119,6 +117,7 @@ MapLibre needs WebGL. Headless / GPU-less environments often show a blank canvas
 | --- | --- |
 | `Planner` | Full-screen map, floating header, collapsible side panel, heatmap legend |
 | `RouteControls` | Tabs, city/profile, mode-specific actions, locate, export GPX |
+| `WaypointList` | Plan-mode stops: reorder, delete, focus |
 | `RouteSummary` | Distance (mi), average bikeability / 10, elevation gain (ft), % high quality |
 | `RouteCharts` | Elevation and bikeability vs distance (hides elevation if all samples are null) |
 | `RoadInspector` | Score, highway, speed, surface, protected infra, scoring reasons |
@@ -153,5 +152,5 @@ Root `make test` runs the production build; `make lint` runs Oxlint + `tsc`.
 
 - Default city is `vancouver`. Without a processed graph the overlay/routing APIs return 503 (the backend may fall back to fixture for some route calls).
 - Heatmap GeoJSON for a full metro is large; the overlay is already collapsed to undirected features to keep MapLibre usable.
-- Partial mock API — do not expect Plan/Trace to work with `VITE_API_MODE=mock` alone.
+- Partial mock API — do not expect Plan routing to work with `VITE_API_MODE=mock` alone.
 - Chart cursor does not appear on the map.

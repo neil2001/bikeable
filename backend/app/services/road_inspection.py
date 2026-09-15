@@ -9,6 +9,7 @@ from app.models.responses import (
 )
 from app.routing.ids import json_osmid, make_road_id, parse_road_id
 from app.routing.metrics import edges_to_coordinates
+from app.routing.names import edge_display_name
 from app.routing.point_to_point import RoutingError
 from app.routing.resolve import resolve_road_edges
 from app.scoring.config import get_profile, load_scoring_config
@@ -57,6 +58,7 @@ def inspect_road(
             speed_kph=features.speed_kph,
             lanes=features.lane_count,
             surface=edge_data.get("surface"),
+            name=edge_display_name(edge_data),
             osmid=json_osmid(edge_data.get("osmid")),
             protected_bike_infrastructure=features.protected_infrastructure,
             bike_lane=features.dedicated_bike_lane,
