@@ -3,7 +3,7 @@
 Map-first cycling planner: score OSM streets for bikeability, then build a route that prefers those streets over a shortest-time path.
 
 ```text
-OpenStreetMap → features → 0–10 score → weighted graph → Plan / Trace / Generate → map + GPX
+OpenStreetMap → features → 0–10 score → weighted graph → Plan / Generate → map + GPX
 ```
 
 The UI is a React + MapLibre planner. The API is FastAPI + NetworkX. Cities today: **Vancouver metro** (needs a built graph) and an in-memory **fixture** network used by tests.
@@ -44,7 +44,7 @@ API_PROXY_TARGET=http://127.0.0.1:8000 VITE_API_MODE=live npm run dev
 
 Open [http://localhost:5173](http://localhost:5173). The Vite dev server proxies `/api` to port 8000.
 
-Without a Vancouver extract the overlay for `vancouver` is unavailable. Tests and Trace/Plan still work against `cityId=fixture`.
+Without a Vancouver extract the overlay for `vancouver` is unavailable. Tests and Plan still work against `cityId=fixture`.
 
 ### Docker
 
@@ -76,8 +76,7 @@ Uses `data/raw/vancouver.osm` / `.osm.pbf` if present, otherwise a bbox extract 
 
 | Tab | Behavior |
 | --- | --- |
-| **Plan** | Click waypoints. Backend shortest-path between snaps, weighted by bikeability vs distance. |
-| **Trace** | Click heatmap roads. Path is those segments (plus short connectors / same-street skip). |
+| **Plan** | Click a road to follow it. Same street traces along it; a new street routes there. Empty-map clicks drop stops. Stops appear in the sidebar. |
 | **Generate** | Click a start, set a distance, generate a loop. |
 | **Settings** | Heatmap opacity and bikeability vs shortness weight. |
 

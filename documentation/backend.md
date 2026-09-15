@@ -78,7 +78,7 @@ Two cities are registered in [`backend/app/graph/registry.py`](../backend/app/gr
 | `vancouver` | Metro Vancouver bbox (UBC through North Van). Requires a processed graph. |
 | `fixture` | Tiny 4-node graph for tests and local demo. Always available in memory. |
 
-`GET /api/v1/cities` **omits fixture** so the UI city picker only shows real cities. Fixture is still addressable by id. If the requested city’s graph is missing, [`resolve_city_id`](../backend/app/services/city_registry.py) falls back to `fixture`.
+`GET /api/v1/cities` **omits fixture** when a real city graph is available so the picker stays production-oriented. If no real graph is built, fixture is included so the planner can still be used. Fixture is always addressable by id. If the requested city’s graph is missing, [`resolve_city_id`](../backend/app/services/city_registry.py) falls back to `fixture`.
 
 Until you run `make build-graph`, Vancouver reports `graphVersion: "unbuilt"` and bikeability/routing against it return `503 GRAPH_UNAVAILABLE` (or silently use fixture when resolving).
 
@@ -96,7 +96,7 @@ JSON uses camelCase. Route/road query `cityId` defaults to `fixture` on the HTTP
 | `POST` | `/api/v1/routes/segment` | Shortest bikeable path between two points |
 | `POST` | `/api/v1/routes/manual` | Chain waypoint pairs; store route |
 | `POST` | `/api/v1/routes/from-roads` | Assemble a walk from ordered `roadIds` |
-| `POST` | `/api/v1/routes/trace-extend` | Grow/skip a Trace selection from a clicked road |
+| `POST` | `/api/v1/routes/trace-extend` | Grow a Plan path from a clicked road or coordinate |
 | `POST` | `/api/v1/routes/loop` | Distance-constrained loop from a start |
 | `GET` | `/api/v1/routes/{routeId}` | Recall a stored route |
 | `GET` | `/api/v1/routes/{routeId}/gpx` | GPX 1.1 download |
@@ -145,7 +145,7 @@ Routing cost ([`routing/cost.py`](../backend/app/routing/cost.py)):
 
 **From-roads**: validate that `roadIds` form a directed walk (with reverse / osmid / skip-edge resolution), concatenate geometries, compute metrics. No shortest-path search.
 
-**Trace-extend** ([`routing/trace.py`](../backend/app/routing/trace.py)): given the current selection and a clicked overlay `roadId`, either start a path, append/prepend a connected edge, skip ahead along the same named/osmid street, or insert a short bikeable connector. Returns an action of `select` | `same_road` | `route`.
+**Trace-extend** ([`routing/trace.py`](../backend/app/routing/trace.py)): given the current selection and a clicked overlay `roadId` (or a map coordinate), grow the path **forward from the current head**. Either start a path, append a connected edge, skip ahead along the same named/osmid street, or insert a short bikeable connector. The first click is oriented so the path starts at the click. Returns an action of `select` | `same_road` | `route` plus an optional `destinationName`.
 
 **Loop** ([`optimization/loop.py`](../backend/app/optimization/loop.py), algorithm `loop-heuristic-v1`): sample nodes near radius `target / 2π`, rank by local bikeability, try multi-waypoint sequences and out-and-backs, keep candidates that satisfy distance (± constraints) and quality limits.
 
