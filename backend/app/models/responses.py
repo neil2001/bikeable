@@ -65,6 +65,7 @@ class RouteResponse(ApiModel):
     profile: list[RouteProfileSample]
     score_breakdown: RouteScoreBreakdown | None = None
     optimization: OptimizationMetadata | None = None
+    road_ids: list[str] | None = None
 
 
 class SegmentRouteResponse(ApiModel):
@@ -78,6 +79,7 @@ class TraceExtendResponse(ApiModel):
     road_ids: list[str]
     action: Literal["select", "same_road", "route"]
     route: RouteResponse
+    destination_name: str | None = None
 
 
 class BikeabilityFeatureProperties(ApiModel):
@@ -104,6 +106,7 @@ class RoadFeatureDiagnostics(ApiModel):
     speed_kph: float | None = None
     lanes: int | None = None
     surface: str | None = None
+    name: str | None = None
     osmid: int | list[int] | None = None
     protected_bike_infrastructure: bool
     bike_lane: bool

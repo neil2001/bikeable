@@ -1,4 +1,4 @@
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from app.models.common import (
     ApiModel,
@@ -39,7 +39,14 @@ class FromRoadsRequest(ApiModel):
 
 class TraceExtendRequest(ApiModel):
     selected_road_ids: list[str] = Field(default_factory=list)
-    clicked_road_id: str
+    clicked_road_id: str | None = None
+    clicked: Coordinate | None = None
     start: Coordinate | None = None
     profile: CyclingProfile
     preferences: RoutePreferences
+
+    @model_validator(mode="after")
+    def require_click_target(self) -> "TraceExtendRequest":
+        if not self.clicked_road_id and self.clicked is None:
+            raise ValueError("clickedRoadId or clicked is required")
+        return self

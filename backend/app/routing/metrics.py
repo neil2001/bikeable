@@ -96,6 +96,18 @@ def road_edges_to_node_path(edges: list[RoadEdge]) -> list[int]:
     return path
 
 
+def node_path_to_edges(graph: nx.MultiDiGraph, path: list[int]) -> list[RoadEdge]:
+    edges: list[RoadEdge] = []
+    for source, target in zip(path, path[1:], strict=False):
+        keyed = graph.get_edge_data(source, target) or {}
+        if not keyed:
+            msg = f"No edge from {source} to {target}."
+            raise ValueError(msg)
+        key = min(keyed)
+        edges.append((source, target, key))
+    return edges
+
+
 def _path_to_road_edges(path: list[int], edge_keys: list[int]) -> list[RoadEdge]:
     if len(path) < 2:
         return []

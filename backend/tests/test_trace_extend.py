@@ -117,7 +117,6 @@ def test_empty_path_selects_clicked_edge() -> None:
         _orientations(graph, 1, 2),
         start=None,
         preferences=PREFERENCES,
-        head_only=False,
     )
     assert result.action == "select"
     assert result.edges == [(1, 2, 0)]
@@ -131,7 +130,6 @@ def test_empty_path_with_start_routes_through_clicked() -> None:
         _orientations(graph, 3, 4),
         start=Coordinate(lat=49.2800, lon=-123.1200),
         preferences=PREFERENCES,
-        head_only=True,
     )
     assert result.action == "route"
     assert result.edges[0][0] == 1
@@ -148,7 +146,6 @@ def test_same_name_skip_ahead_fills_intervening_edges() -> None:
         _orientations(graph, 3, 4),
         start=None,
         preferences=PREFERENCES,
-        head_only=False,
     )
     assert result.action == "same_road"
     assert result.edges == [(1, 2, 0), (2, 3, 0), (3, 4, 0)]
@@ -162,7 +159,6 @@ def test_unnamed_same_osmid_fills_corridor() -> None:
         _orientations(graph, 3, 4),
         start=None,
         preferences=PREFERENCES,
-        head_only=False,
     )
     assert result.action == "same_road"
     assert result.edges == [(1, 2, 0), (2, 3, 0), (3, 4, 0)]
@@ -176,7 +172,6 @@ def test_different_name_uses_bikeable_connector() -> None:
         _orientations(graph, 7, 8),
         start=None,
         preferences=PREFERENCES,
-        head_only=False,
     )
     assert result.action == "route"
     assert result.edges[0] == (1, 2, 0)
@@ -193,7 +188,6 @@ def test_interrupted_same_name_falls_through_to_bikeable_route() -> None:
         _orientations(graph, 5, 6),
         start=None,
         preferences=PREFERENCES,
-        head_only=False,
     )
     assert result.action == "route"
     assert result.edges[0] == (1, 2, 0)
@@ -306,3 +300,100 @@ def test_trace_extend_api_start_snaps_to_fixture_network() -> None:
     assert payload["roadIds"][0] == make_road_id(1, 2, 0)
     assert payload["roadIds"][-1] in {"2:3:0", "3:2:0"}
     assert payload["action"] in {"route", "select"}
+
+
+def test_origin_orients_path_to_start_at_click() -> None:
+    graph = _score(_named_network())
+    result = extend_trace(
+        graph,
+        [],
+        _orientations(graph, 1, 2),
+        start=Coordinate(lat=49.2800, lon=-123.1100),
+        preferences=PREFERENCES,
+    )
+    assert result.edges[0][0] == 2
+    assert result.edges[0] == (2, 1, 0)
+    assert result.destination_name == "West 4th Avenue"
+
+
+def test_sequential_clicks_always_append() -> None:
+    graph = _score(_named_network())
+    first = extend_trace(
+        graph,
+        [],
+        _orientations(graph, 1, 2),
+        start=Coordinate(lat=49.2800, lon=-123.1200),
+        preferences=PREFERENCES,
+    )
+    second = extend_trace(
+        graph,
+        first.edges,
+        _orientations(graph, 3, 4),
+        start=None,
+        preferences=PREFERENCES,
+    )
+    third = extend_trace(
+        graph,
+        second.edges,
+        _orientations(graph, 7, 8),
+        start=None,
+        preferences=PREFERENCES,
+    )
+    assert first.edges[0][0] == 1
+    assert second.edges[: len(first.edges)] == first.edges
+    assert second.edges[-1] == (3, 4, 0)
+    assert third.edges[: len(second.edges)] == second.edges
+    assert third.edges[-1] == (7, 8, 0)
+    assert third.destination_name == "Broadway"
+
+
+def test_click_behind_start_still_appends_from_head() -> None:
+    graph = _score(_named_network())
+    selected = [(2, 3, 0), (3, 4, 0)]
+    result = extend_trace(
+        graph,
+        selected,
+        _orientations(graph, 1, 2),
+        start=None,
+        preferences=PREFERENCES,
+    )
+    assert result.edges[:2] == selected
+    assert result.edges[-1] in {(1, 2, 0), (2, 1, 0)}
+    assert result.edges[0] == (2, 3, 0)
+
+
+def test_coordinate_extend_appends_from_head() -> None:
+    graph = _score(_named_network())
+    result = extend_trace(
+        graph,
+        [(1, 2, 0)],
+        [],
+        start=None,
+        preferences=PREFERENCES,
+        destination=Coordinate(lat=49.2640, lon=-123.1000),
+    )
+    assert result.action == "route"
+    assert result.edges[0] == (1, 2, 0)
+    assert result.edges[-1][1] == 8
+
+
+def test_trace_extend_api_accepts_clicked_coordinate(monkeypatch) -> None:
+    graph = _score(_named_network())
+    monkeypatch.setattr(
+        "app.services.routing.get_scored_graph",
+        lambda _city_id, _profile: (graph, graph),
+    )
+    response = client.post(
+        "/api/v1/routes/trace-extend?cityId=fixture",
+        json={
+            "selectedRoadIds": ["1:2:0"],
+            "clicked": {"lat": 49.2640, "lon": -123.1000},
+            "profile": "road",
+            "preferences": PREFERENCES_JSON,
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["action"] == "route"
+    assert payload["roadIds"][0] == "1:2:0"
+    assert payload["roadIds"][-1] in {"7:8:0", "8:7:0"}
