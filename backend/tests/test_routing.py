@@ -27,6 +27,26 @@ def test_bikeability_preference_avoids_primary_shortcut() -> None:
     assert 2 in _path
 
 
+def test_preferences_change_path_without_mutating_graph() -> None:
+    graph = score_graph(apply_features_to_graph(build_tiny_graph()))
+    start = Coordinate(lat=49.2800, lon=-123.1200)
+    end = Coordinate(lat=49.2820, lon=-123.1000)
+    bike_path, bike_metrics, _ = route_point_to_point(
+        graph,
+        start,
+        end,
+        _preferences(distance_weight=0.1),
+    )
+    dist_path, dist_metrics, _ = route_point_to_point(
+        graph,
+        start,
+        end,
+        _preferences(distance_weight=0.95),
+    )
+    assert dist_metrics.distance_m < bike_metrics.distance_m
+    assert dist_path != bike_path
+
+
 def test_distance_preference_uses_primary_shortcut() -> None:
     graph = score_graph(apply_features_to_graph(build_tiny_graph()))
     start = Coordinate(lat=49.2800, lon=-123.1200)

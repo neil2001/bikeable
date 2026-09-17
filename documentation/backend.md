@@ -141,7 +141,7 @@ Routing cost ([`routing/cost.py`](../backend/app/routing/cost.py)):
 
 ## Routing modes
 
-**Point-to-point** ([`routing/point_to_point.py`](../backend/app/routing/point_to_point.py)): snap start/end to the nearest node (max 250 m), then NetworkX Dijkstra on `routing_cost`. This is Plan-mode waypoint routing.
+**Point-to-point** ([`routing/point_to_point.py`](../backend/app/routing/point_to_point.py)): snap start/end to the nearest edge via the routing index (max 250 m), then NetworkX weighted shortest path using an on-the-fly cost callback (no per-request graph copy). This is Plan-mode waypoint routing.
 
 **From-roads**: validate that `roadIds` form a directed walk (with reverse / osmid / skip-edge resolution), concatenate geometries, compute metrics. No shortest-path search.
 
@@ -173,5 +173,5 @@ Coverage includes health/OpenAPI, features, scoring v2, graph ingest/QA, point-t
 - Route store is in-memory only.
 - Overlay is a single GeoJSON payload, which is large for a full metro graph.
 - GPX elevation currently stamps the first known elevation on every trackpoint.
-- [`backend/app/routing/session.py`](../backend/app/routing/session.py) / `index.py` look like an unfinished A* path and are not used by live Dijkstra routing.
+- [`backend/app/routing/session.py`](../backend/app/routing/session.py) is an unfinished A* path and is not used by live routing; [`routing/index.py`](../backend/app/routing/index.py) is used for nearest-edge snap on cached bike graphs.
 - Query-string `cityId` defaults to `fixture` while app settings default to `vancouver`.

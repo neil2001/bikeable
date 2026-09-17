@@ -13,6 +13,7 @@ from app.graph.store import (
     processed_graph_paths,
     read_graph_metadata,
 )
+from app.routing.index import attach_routing_index
 from app.scoring.bike_graph import create_bike_graph
 from app.scoring.config import cached_scoring_config
 from app.scoring.score import score_graph
@@ -116,7 +117,9 @@ def get_scored_graph(city_id: str) -> tuple[nx.MultiDiGraph, nx.MultiDiGraph]:
         scored = score_graph(graph)
         _store_scored_graph(cache_key, scored)
 
-    bike_graph = create_bike_graph(scored, allow_walk_links=True)
+    bike_graph = attach_routing_index(
+        create_bike_graph(scored, allow_walk_links=True),
+    )
     _bike_graph_cache[cache_key] = bike_graph
     _touch_cache_key(cache_key)
     return scored, bike_graph

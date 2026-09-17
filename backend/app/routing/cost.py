@@ -25,6 +25,24 @@ def edge_routing_cost(
     return cost
 
 
+def routing_weight_fn(preferences: RoutePreferences):
+    routing = cached_scoring_config().routing
+
+    def weight(_source: int, _target: int, keyed: dict) -> float:
+        return min(
+            edge_routing_cost(
+                float(data.get("length_m", data.get("length", 1.0))),
+                float(data.get("bikeability", 5.0)),
+                preferences,
+                routing=routing,
+                walk_link=bool(data.get("walk_link")),
+            )
+            for data in keyed.values()
+        )
+
+    return weight
+
+
 def apply_routing_costs(graph, preferences: RoutePreferences) -> None:
     routing = cached_scoring_config().routing
     for _source, _target, _key, edge_data in graph.edges(keys=True, data=True):
