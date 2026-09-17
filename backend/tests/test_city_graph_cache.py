@@ -53,6 +53,7 @@ def test_overlay_path_does_not_copy_bike_subgraph() -> None:
     if path.exists():
         path.unlink()
     get_bikeability_overlay_path("fixture")
+    assert path.read_bytes()[:7] == b"PMTiles"
     assert len(_scored_graph_cache) == 1
     assert len(_bike_graph_cache) == 0
 

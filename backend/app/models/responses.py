@@ -26,6 +26,7 @@ class CitySummary(ApiModel):
     bbox: BBox
     graph_version: str
     score_version: str
+    overlay_version: str
 
 
 class CityListResponse(ApiModel):

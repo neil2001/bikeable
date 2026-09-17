@@ -95,7 +95,7 @@ Or separately: `cd backend && uv run pytest`; `cd frontend && npm run lint && np
 
 Prefix `/api/v1`. JSON is camelCase.
 
-- `GET /health`, `GET /cities`, `GET /cities/{id}/bikeability`
+- `GET /health`, `GET /cities`, `GET /cities/{id}/bikeability/tiles/{z}/{x}/{y}.pbf`
 - `GET /roads/{roadId}`
 - `POST /routes/segment`, `/routes/manual`, `/routes/from-roads`, `/routes/trace-extend`, `/routes/loop`
 - `GET /routes/{routeId}`, `GET /routes/{routeId}/gpx`

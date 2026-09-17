@@ -75,6 +75,7 @@ export function Planner() {
           center={mapCenter}
           cityBbox={planner.selectedCity?.bbox}
           heatmapCityId={planner.cityId}
+          overlayVersion={planner.selectedCity?.overlayVersion ?? ""}
           routeCoordinates={routeCoordinates}
           waypoints={planner.waypoints}
           selectedRoadIds={planner.selectedRoadIds}

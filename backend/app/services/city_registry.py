@@ -2,7 +2,7 @@ from app.config import settings
 from app.graph.registry import get_city_definition
 from app.models.responses import BBox, CitySummary
 from app.scoring.config import cached_scoring_config
-from app.services.city_graph import city_graph_is_available
+from app.services.city_graph import city_graph_is_available, overlay_version
 
 SCORE_VERSION = str(cached_scoring_config().version)
 
@@ -17,6 +17,7 @@ FIXTURE = CitySummary(
     ),
     graph_version="1",
     score_version=SCORE_VERSION,
+    overlay_version=overlay_version("fixture"),
 )
 
 VANCOUVER = CitySummary(
@@ -30,6 +31,7 @@ VANCOUVER = CitySummary(
     ),
     graph_version="1" if city_graph_is_available("vancouver") else "unbuilt",
     score_version=SCORE_VERSION,
+    overlay_version=overlay_version("vancouver"),
 )
 
 CITY_SUMMARIES = {

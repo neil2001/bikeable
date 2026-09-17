@@ -8,9 +8,9 @@ def test_end_to_end_fixture_workflow() -> None:
     health = client.get("/api/v1/health")
     assert health.status_code == 200
 
-    network = client.get("/api/v1/cities/fixture/bikeability")
-    assert network.status_code == 200
-    assert network.json()["features"]
+    tile = client.get("/api/v1/cities/fixture/bikeability/tiles/12/647/1401.pbf")
+    assert tile.status_code == 200
+    assert tile.content
 
     segment = client.post(
         "/api/v1/routes/segment?cityId=fixture",

@@ -91,7 +91,7 @@ JSON uses camelCase. Route/road query `cityId` defaults to `fixture` on the HTTP
 | `GET` | `/api/v1/health` | Liveness `{ status: "ok" }` |
 | `GET` | `/api/v1/cities` | City list (no fixture) |
 | `GET` | `/api/v1/cities/{cityId}` | One city summary + bbox |
-| `GET` | `/api/v1/cities/{cityId}/bikeability` | Gzipped GeoJSON overlay + ETag |
+| `GET` | `/api/v1/cities/{cityId}/bikeability/tiles/{z}/{x}/{y}.pbf` | Vector tile (MVT) overlay + ETag |
 | `GET` | `/api/v1/roads/{roadId}?cityId` | Inspect one edge |
 | `POST` | `/api/v1/routes/segment` | Shortest bikeable path between two points |
 | `POST` | `/api/v1/routes/manual` | Chain waypoint pairs; store route |
@@ -155,7 +155,7 @@ Elevation comes from Open-Meteo when `ELEVATION_PROVIDER=open_meteo`; otherwise 
 
 ## Heatmap overlay
 
-`GET /cities/{id}/bikeability` serves a **gzipped GeoJSON** FeatureCollection (not vector tiles). [`graph_to_bikeability_geojson`](../backend/app/services/bikeability_map.py) keeps traversable edges, collapses two-way pairs to one undirected LineString (higher score wins), and sets `roadId` + `bikeability`. Files are cached next to the processed graph and returned with `ETag` / `304`.
+`GET /cities/{id}/bikeability/tiles/{z}/{x}/{y}.pbf` serves **Mapbox vector tiles** from a cached **PMTiles** archive. [`graph_to_bikeability_geojson`](../backend/app/services/bikeability_map.py) builds the overlay (traversable edges, collapsed bidirectional pairs, `roadId` + `bikeability`); [`bikeability_tiles.py`](../backend/app/services/bikeability_tiles.py) encodes MVT zoom 8–14. `make build-graph` prebuilds `bikeability-g{graph}-s{score}-o{format}.pmtiles` next to the processed graph. Tiles use `ETag` / `304`; empty tiles return `204`.
 
 ## Tests
 
@@ -171,7 +171,7 @@ Coverage includes health/OpenAPI, features, scoring v2, graph ingest/QA, point-t
 
 - Vancouver graph is not committed; clone + `make build-graph` (needs OSM download or a local PBF, and osmium for PBF clipping).
 - Route store is in-memory only.
-- Overlay is a single GeoJSON payload, which is large for a full metro graph.
+- First request after an overlay format bump rebuilds PMTiles (slow for a full metro until `make build-graph` is run).
 - GPX elevation currently stamps the first known elevation on every trackpoint.
 - [`backend/app/routing/session.py`](../backend/app/routing/session.py) is an unfinished A* path and is not used by live routing; [`routing/index.py`](../backend/app/routing/index.py) is used for nearest-edge snap on cached bike graphs.
 - Query-string `cityId` defaults to `fixture` while app settings default to `vancouver`.

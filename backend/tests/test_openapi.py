@@ -7,7 +7,7 @@ EXPECTED_PATHS = {
     "/api/v1/health",
     "/api/v1/cities",
     "/api/v1/cities/{cityId}",
-    "/api/v1/cities/{cityId}/bikeability",
+    "/api/v1/cities/{cityId}/bikeability/tiles/{z}/{x}/{y}.pbf",
     "/api/v1/roads/{roadId}",
     "/api/v1/routes/segment",
     "/api/v1/routes/manual",

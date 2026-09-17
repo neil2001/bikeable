@@ -62,7 +62,7 @@ Mock mode only covers health, cities, bikeability overlay, and loop generation. 
 | --- | --- |
 | `getHealth` | `GET /api/v1/health` |
 | `getCities` | `GET /api/v1/cities` |
-| `getBikeabilityNetwork` | `GET /api/v1/cities/{id}/bikeability` |
+| `bikeabilityTileUrl` | `GET /api/v1/cities/{id}/bikeability/tiles/{z}/{x}/{y}.pbf` (MapLibre vector source) |
 | `inspectRoad` | `GET /api/v1/roads/{id}` |
 | `routeSegment` / `routeManual` | Plan-mode routing |
 | `routeFromRoads` | Rebuild a path from `roadIds` |
@@ -104,7 +104,7 @@ Click the map to set a start (`S` marker, draggable). **Generate route** calls `
 [`MapView`](../frontend/src/map/MapView.tsx):
 
 - Basemap: OpenFreeMap Positron (`https://tiles.openfreemap.org/styles/positron`).
-- Source `bikeability`: GeoJSON from `getBikeabilityNetwork`, restyled by score (grey → amber → green → teal) with zoom-scaled width/opacity so dense cities do not fill in as a blob.
+- Source `bikeability`: vector tiles from `bikeabilityTileUrl` (versioned via `CitySummary.overlayVersion`), restyled by score (grey → amber → green → teal) with zoom-scaled width/opacity so dense cities do not fill in as a blob. Mock mode uses a small GeoJSON fixture instead.
 - Filter: legend dual-range 0–10.
 - Source `route`: white casing + blue line (`#2563eb`).
 - Layer `traced-roads`: thicker blue highlight of selected overlay ids.
@@ -154,6 +154,6 @@ Root `make test` runs the production build; `make lint` runs Oxlint + `tsc`.
 ## Limitations
 
 - Default city is `vancouver`. Without a processed graph the overlay/routing APIs return 503 (the backend may fall back to fixture for some route calls).
-- Heatmap GeoJSON for a full metro is large; the overlay is already collapsed to undirected features to keep MapLibre usable.
+- Live mode needs a built PMTiles overlay (`make build-graph` or first API build) before roads appear.
 - Partial mock API — do not expect Plan routing to work with `VITE_API_MODE=mock` alone.
 - Chart cursor does not appear on the map.

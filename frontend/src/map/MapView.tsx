@@ -1,8 +1,11 @@
 import * as maplibregl from "maplibre-gl";
 import type { FilterSpecification, LngLatBoundsLike, LngLatLike, Map, MapMouseEvent } from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
-import { getBikeabilityNetwork } from "../api/client";
-import { ApiClientError } from "../api/errors";
+import {
+  bikeabilityTileUrl,
+  getMockBikeabilityNetwork,
+  isMockApi,
+} from "../api/client";
 import type { Waypoint } from "../hooks/usePlanner";
 import type { Coordinate } from "../types/api";
 import { BIKEABILITY_STOPS, ROUTE_CASING, ROUTE_COLOR } from "./colors";
@@ -14,6 +17,7 @@ type Props = {
   center: Coordinate;
   cityBbox?: { minLon: number; minLat: number; maxLon: number; maxLat: number } | null;
   heatmapCityId: string;
+  overlayVersion: string;
   routeCoordinates: [number, number][][];
   waypoints: Waypoint[];
   selectedRoadIds?: string[];
@@ -34,6 +38,8 @@ type Props = {
   cursorDistanceM: number | null;
 };
 
+const BIKEABILITY_SOURCE = "bikeability";
+const ROAD_SOURCE_LAYER = "roads";
 const ROAD_LAYER = "bikeability-roads";
 const TRACE_LAYER = "traced-roads";
 const ROUTE_CASING_LAYER = "route-casing";
@@ -134,6 +140,55 @@ function heatmapWidthExpression(): maplibregl.ExpressionSpecification {
   ];
 }
 
+function roadIdFromFeature(feature: maplibregl.MapGeoJSONFeature): string | null {
+  const roadId = feature.properties?.roadId;
+  if (roadId === undefined || roadId === null) {
+    return null;
+  }
+  return String(roadId);
+}
+
+function addBikeabilityLayers(map: Map, heatmapOpacity: number, vectorSource: boolean) {
+  if (map.getLayer(ROAD_LAYER)) {
+    return;
+  }
+  const sourceLayer = vectorSource ? { "source-layer": ROAD_SOURCE_LAYER } : {};
+  map.addLayer({
+    id: ROAD_LAYER,
+    type: "line",
+    source: BIKEABILITY_SOURCE,
+    ...sourceLayer,
+    layout: {
+      "line-cap": "round",
+      "line-join": "round",
+      visibility: "visible",
+    },
+    paint: {
+      "line-color": heatmapColorExpression(),
+      "line-width": heatmapWidthExpression(),
+      "line-opacity": heatmapOpacityExpression(heatmapOpacity),
+    },
+  });
+
+  map.addLayer({
+    id: TRACE_LAYER,
+    type: "line",
+    source: BIKEABILITY_SOURCE,
+    ...sourceLayer,
+    layout: {
+      "line-cap": "round",
+      "line-join": "round",
+      visibility: "none",
+    },
+    paint: {
+      "line-color": ROUTE_COLOR,
+      "line-width": ["interpolate", ["linear"], ["zoom"], 10, 3.5, 13, 6, 16, 9],
+      "line-opacity": 0.9,
+    },
+    filter: ["==", ["get", "roadId"], "__none__"],
+  });
+}
+
 function bikeabilityFilter(min: number, max: number): FilterSpecification {
   return [
     "all",
@@ -169,6 +224,7 @@ export function MapView({
   center,
   cityBbox,
   heatmapCityId,
+  overlayVersion,
   routeCoordinates,
   waypoints,
   selectedRoadIds = [],
@@ -243,44 +299,6 @@ export function MapView({
       readyRef.current = true;
       setMapReady(true);
 
-      map.addSource("bikeability", {
-        type: "geojson",
-        data: { type: "FeatureCollection", features: [] },
-      });
-
-      map.addLayer({
-        id: ROAD_LAYER,
-        type: "line",
-        source: "bikeability",
-        layout: {
-          "line-cap": "round",
-          "line-join": "round",
-          visibility: "visible",
-        },
-        paint: {
-          "line-color": heatmapColorExpression(),
-          "line-width": heatmapWidthExpression(),
-          "line-opacity": heatmapOpacityExpression(heatmapOpacity),
-        },
-      });
-
-      map.addLayer({
-        id: TRACE_LAYER,
-        type: "line",
-        source: "bikeability",
-        layout: {
-          "line-cap": "round",
-          "line-join": "round",
-          visibility: "none",
-        },
-        paint: {
-          "line-color": ROUTE_COLOR,
-          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 3.5, 13, 6, 16, 9],
-          "line-opacity": 0.9,
-        },
-        filter: ["==", ["get", "roadId"], "__none__"],
-      });
-
       map.addSource("route", {
         type: "geojson",
         data: { type: "FeatureCollection", features: [] },
@@ -334,11 +352,7 @@ export function MapView({
         const layers = map.getLayer(TRACE_LAYER) ? [TRACE_LAYER, ROAD_LAYER] : [ROAD_LAYER];
         const roadHits = map.queryRenderedFeatures(roadHitBox(event.point), { layers });
         const roadIds = [
-          ...new Set(
-            roadHits
-              .map((feature) => feature.properties?.roadId)
-              .filter((roadId): roadId is string => typeof roadId === "string"),
-          ),
+          ...new Set(roadHits.map(roadIdFromFeature).filter((roadId): roadId is string => roadId !== null)),
         ];
         if (roadIds.length > 0) {
           onRoadClickRef.current(roadIds, { lat: event.lngLat.lat, lon: event.lngLat.lng });
@@ -379,42 +393,59 @@ export function MapView({
     if (!map || !readyRef.current) {
       return;
     }
+    if (!isMockApi() && !overlayVersion) {
+      return;
+    }
 
-    let cancelled = false;
     onHeatmapLoadingChangeRef.current?.(true);
     onHeatmapErrorRef.current?.(null);
 
-    void getBikeabilityNetwork(heatmapCityId)
-      .then((network) => {
-        if (cancelled) {
-          return;
-        }
-        const source = map.getSource("bikeability") as maplibregl.GeoJSONSource | undefined;
-        source?.setData({
-          type: "FeatureCollection",
-          features: network.features,
+    const finishLoading = () => {
+      onHeatmapLoadingChangeRef.current?.(false);
+    };
+
+    const onIdle = () => {
+      map.off("idle", onIdle);
+      finishLoading();
+    };
+
+    if (isMockApi()) {
+      if (!map.getSource(BIKEABILITY_SOURCE)) {
+        map.addSource(BIKEABILITY_SOURCE, {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
         });
-      })
-      .catch((cause: unknown) => {
-        if (cancelled) {
-          return;
-        }
-        const source = map.getSource("bikeability") as maplibregl.GeoJSONSource | undefined;
-        source?.setData({ type: "FeatureCollection", features: [] });
-        if (cause instanceof ApiClientError) {
-          onHeatmapErrorRef.current?.(cause.message);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          onHeatmapLoadingChangeRef.current?.(false);
-        }
+        addBikeabilityLayers(map, heatmapOpacity, false);
+      }
+      const source = map.getSource(BIKEABILITY_SOURCE) as maplibregl.GeoJSONSource | undefined;
+      source?.setData({
+        type: "FeatureCollection",
+        features: getMockBikeabilityNetwork().features,
       });
+      finishLoading();
+      return;
+    }
+
+    const tileUrl = bikeabilityTileUrl(heatmapCityId, overlayVersion);
+    const existing = map.getSource(BIKEABILITY_SOURCE) as maplibregl.VectorTileSource | undefined;
+    if (existing) {
+      existing.setTiles([tileUrl]);
+    } else {
+      map.addSource(BIKEABILITY_SOURCE, {
+        type: "vector",
+        tiles: [tileUrl],
+        minzoom: 8,
+        maxzoom: 14,
+        promoteId: "roadId",
+      });
+      addBikeabilityLayers(map, heatmapOpacity, true);
+    }
+    map.once("idle", onIdle);
 
     return () => {
-      cancelled = true;
+      map.off("idle", onIdle);
     };
-  }, [heatmapCityId, mapReady]);
+  }, [heatmapCityId, overlayVersion, mapReady, heatmapOpacity]);
 
   useEffect(() => {
     const map = mapRef.current;

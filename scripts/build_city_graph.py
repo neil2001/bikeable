@@ -15,6 +15,7 @@ from app.graph.loader import GraphPipelineError, build_city_graph  # noqa: E402
 from app.graph.qa import analyze_graph, format_qa_report  # noqa: E402
 from app.graph.registry import CITY_REGISTRY  # noqa: E402
 from app.graph.store import processed_graph_paths, read_graph_metadata  # noqa: E402
+from app.services.city_graph import build_bikeability_overlay  # noqa: E402
 
 
 def main() -> int:
@@ -49,6 +50,7 @@ def main() -> int:
 
     paths = processed_graph_paths(settings.processed_data_dir, args.city_id)
     metadata = read_graph_metadata(paths)
+    overlay_path = build_bikeability_overlay(args.city_id)
 
     print(f"Built graph for {args.city_id}")
     print(f"  graphml: {paths.graphml}")
@@ -57,6 +59,7 @@ def main() -> int:
     print(f"  edges:   {graph.number_of_edges()}")
     print(f"  version: {metadata['graphVersion']}")
     print(f"  source:  {metadata['source']}")
+    print(f"  tiles:   {overlay_path}")
     print("QA")
     print(format_qa_report(analyze_graph(graph)))
     return 0

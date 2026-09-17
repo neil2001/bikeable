@@ -23,23 +23,21 @@ import {
 const apiMode = import.meta.env.VITE_API_MODE ?? "live";
 const defaultCityId = import.meta.env.VITE_DEFAULT_CITY_ID ?? "vancouver";
 
-type BikeabilityNetworkCacheEntry = {
-  etag: string;
-  payload: BikeabilityNetworkResponse;
-};
-
-const bikeabilityNetworkCache = new Map<string, BikeabilityNetworkCacheEntry>();
-
-function bikeabilityNetworkCacheKey(cityId: string): string {
-  return cityId;
-}
-
 export function isMockApi(): boolean {
   return apiMode === "mock";
 }
 
 export function getDefaultCityId(): string {
   return defaultCityId;
+}
+
+export function bikeabilityTileUrl(cityId: string, overlayVersion: string): string {
+  const version = encodeURIComponent(overlayVersion);
+  return `/api/v1/cities/${cityId}/bikeability/tiles/{z}/{x}/{y}.pbf?v=${version}`;
+}
+
+export function getMockBikeabilityNetwork(): BikeabilityNetworkResponse {
+  return mockBikeabilityNetwork;
 }
 
 export async function getHealth(): Promise<HealthResponse> {
@@ -56,37 +54,6 @@ export async function getCities(): Promise<CityListResponse> {
   }
   const response = await fetch("/api/v1/cities");
   return parseApiResponse<CityListResponse>(response);
-}
-
-export async function getBikeabilityNetwork(
-  cityId: string,
-): Promise<BikeabilityNetworkResponse> {
-  if (isMockApi()) {
-    return mockBikeabilityNetwork;
-  }
-  const cacheKey = bikeabilityNetworkCacheKey(cityId);
-  const cached = bikeabilityNetworkCache.get(cacheKey);
-  const headers: HeadersInit = {};
-  if (cached?.etag) {
-    headers["If-None-Match"] = cached.etag;
-  }
-  const response = await fetch(`/api/v1/cities/${cityId}/bikeability`, {
-    headers,
-  });
-  if (response.status === 304) {
-    if (!cached) {
-      throw new Error(
-        `Bikeability network cache miss for ${cacheKey} on 304 response`,
-      );
-    }
-    return cached.payload;
-  }
-  const payload = await parseApiResponse<BikeabilityNetworkResponse>(response);
-  const etag = response.headers.get("etag");
-  if (etag) {
-    bikeabilityNetworkCache.set(cacheKey, { etag, payload });
-  }
-  return payload;
 }
 
 export async function inspectRoad(

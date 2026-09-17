@@ -122,6 +122,7 @@ export type CitySummary = {
   bbox: BBox;
   graphVersion: string;
   scoreVersion: string;
+  overlayVersion: string;
 };
 
 export type CityListResponse = {
