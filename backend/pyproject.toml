@@ -5,8 +5,11 @@ description = "Bikeable route finder API"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.141.1",
+    "mapbox-vector-tile>=2.2.0",
+    "mercantile>=1.2.1",
     "networkx>=3.6.1",
     "osmnx>=2.1.1",
+    "pmtiles>=3.8.1",
     "pydantic-settings>=2.11.0",
     "pyyaml>=6.0.2",
     "uvicorn>=0.52.4",

@@ -5,6 +5,7 @@ from functools import lru_cache
 
 import networkx as nx
 from app.models.common import Coordinate
+from app.routing.index import CANDIDATE_EDGE_RADIUS_M, get_routing_index
 from pyproj import Transformer
 
 DEFAULT_MAX_SNAP_M = 250.0
@@ -33,10 +34,15 @@ def nearest_edge_snap(graph: nx.MultiDiGraph, point: Coordinate) -> tuple[int, f
         raise ValueError(msg)
 
     px, py, uses_projected = _query_xy(graph, point)
+    index = get_routing_index(graph)
     best_node: int | None = None
     best_distance = float("inf")
 
-    for source, target, _key, edge_data in graph.edges(keys=True, data=True):
+    for source, target, key in index.candidate_edges(
+        point,
+        radius_m=CANDIDATE_EDGE_RADIUS_M,
+    ):
+        edge_data = graph.edges[source, target, key]
         distance, node_id = _distance_to_edge(
             graph,
             source,
@@ -52,8 +58,7 @@ def nearest_edge_snap(graph: nx.MultiDiGraph, point: Coordinate) -> tuple[int, f
             best_node = node_id
 
     if best_node is None:
-        msg = "Graph has no edges to snap against."
-        raise ValueError(msg)
+        return 0, float("inf")
     return best_node, best_distance
 
 

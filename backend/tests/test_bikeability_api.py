@@ -1,19 +1,28 @@
+import mapbox_vector_tile
 import networkx as nx
 from app.features.apply import apply_features_to_graph
+from app.graph.fixture import build_tiny_graph
 from app.main import app
 from app.scoring.score import score_graph
+from app.services.bikeability_map import graph_to_bikeability_geojson
+from app.services.bikeability_tiles import SOURCE_LAYER, overlay_bbox
 from app.services.city_graph import OVERLAY_FORMAT_VERSION
 from app.services.road_inspection import inspect_road
 from fastapi.testclient import TestClient
 
 client = TestClient(app)
 
+FIXTURE_TILE = (12, 647, 1401)
+FIXTURE_ROAD_ID = "1:2:0"
 
-def test_bikeability_returns_304_when_etag_matches() -> None:
-    first = client.get("/api/v1/cities/fixture/bikeability")
+
+def test_bikeability_tile_returns_304_when_etag_matches() -> None:
+    z, x, y = FIXTURE_TILE
+    first = client.get(f"/api/v1/cities/fixture/bikeability/tiles/{z}/{x}/{y}.pbf")
+    assert first.status_code == 200
     etag = first.headers["etag"]
     second = client.get(
-        "/api/v1/cities/fixture/bikeability",
+        f"/api/v1/cities/fixture/bikeability/tiles/{z}/{x}/{y}.pbf",
         headers={"If-None-Match": etag},
     )
     assert second.status_code == 304
@@ -21,23 +30,50 @@ def test_bikeability_returns_304_when_etag_matches() -> None:
     assert second.content == b"" or not second.content
 
 
-def test_bikeability_network_for_fixture_city() -> None:
-    response = client.get("/api/v1/cities/fixture/bikeability")
+def test_bikeability_tile_for_fixture_city() -> None:
+    z, x, y = FIXTURE_TILE
+    response = client.get(f"/api/v1/cities/fixture/bikeability/tiles/{z}/{x}/{y}.pbf")
     assert response.status_code == 200
     assert "etag" in response.headers
     assert f"-{OVERLAY_FORMAT_VERSION}-" in response.headers["etag"]
-    payload = response.json()
-    assert payload["cityId"] == "fixture"
-    assert payload["scoreVersion"] == "2"
-    assert payload["type"] == "FeatureCollection"
-    assert len(payload["features"]) > 0
-    feature = payload["features"][0]
-    assert "roadId" in feature["properties"]
-    assert "osmid" in feature["properties"]
-    assert "bikeability" in feature["properties"]
-    assert feature["geometry"]["type"] == "LineString"
-    scores = [item["properties"]["bikeability"] for item in payload["features"]]
-    assert max(scores) > 5.0
+    assert response.headers["content-type"].startswith("application/vnd.mapbox-vector-tile")
+    decoded = mapbox_vector_tile.decode(response.content)
+    layer = decoded[SOURCE_LAYER]
+    assert len(layer["features"]) > 0
+    props = layer["features"][0]["properties"]
+    assert "roadId" in props
+    assert "bikeability" in props
+    assert "osmid" not in props
+
+
+def test_bikeability_empty_tile_returns_204() -> None:
+    response = client.get("/api/v1/cities/fixture/bikeability/tiles/8/0/0.pbf")
+    assert response.status_code == 204
+
+
+def test_fixture_tile_feature_count_matches_overlay_at_city_zoom() -> None:
+    scored = score_graph(apply_features_to_graph(build_tiny_graph()))
+    overlay = graph_to_bikeability_geojson(
+        scored,
+        city_id="fixture",
+        score_version="2",
+    )
+    west, south, east, north = overlay_bbox(overlay)
+    overlay_count = len(overlay["features"])
+
+    tile_total = 0
+    import mercantile
+
+    for tile in mercantile.tiles(west, south, east, north, zooms=12):
+        response = client.get(
+            f"/api/v1/cities/fixture/bikeability/tiles/{tile.z}/{tile.x}/{tile.y}.pbf",
+        )
+        if response.status_code != 200:
+            continue
+        decoded = mapbox_vector_tile.decode(response.content)
+        tile_total += len(decoded[SOURCE_LAYER]["features"])
+
+    assert tile_total == overlay_count
 
 
 def test_inspect_expands_dropped_skip_edge() -> None:
@@ -65,14 +101,12 @@ def test_inspect_expands_dropped_skip_edge() -> None:
 
 
 def test_road_inspection_returns_score_components() -> None:
-    network = client.get("/api/v1/cities/fixture/bikeability").json()
-    road_id = network["features"][0]["properties"]["roadId"]
     response = client.get(
-        f"/api/v1/roads/{road_id}?cityId=fixture",
+        f"/api/v1/roads/{FIXTURE_ROAD_ID}?cityId=fixture",
     )
     assert response.status_code == 200
     payload = response.json()
-    assert payload["roadId"] == road_id
+    assert payload["roadId"] == FIXTURE_ROAD_ID
     assert 0 <= payload["bikeability"]["score"] <= 10
     components = payload["bikeability"]["components"]
     assert "infrastructure" in components

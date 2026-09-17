@@ -1,6 +1,6 @@
 import networkx as nx
 from app.models.common import Coordinate, RoutePreferences
-from app.routing.cost import apply_routing_costs
+from app.routing.cost import routing_weight_fn
 from app.routing.metrics import RouteMetrics, build_line_string, compute_route_metrics
 from app.routing.nearest import nearest_node
 
@@ -18,33 +18,26 @@ def route_point_to_point(
     end: Coordinate,
     preferences: RoutePreferences,
 ) -> tuple[list[int], RouteMetrics, object]:
-    routing_graph = graph.copy()
-    apply_routing_costs(routing_graph, preferences)
-
     try:
-        start_node = nearest_node(routing_graph, start)
-        end_node = nearest_node(routing_graph, end)
+        start_node = nearest_node(graph, start)
+        end_node = nearest_node(graph, end)
     except ValueError as exc:
         raise RoutingError(
             "INVALID_COORDINATES",
             "Could not resolve start or end to the street network.",
         ) from exc
 
+    weight = routing_weight_fn(preferences)
     try:
-        path = nx.shortest_path(
-            routing_graph,
-            start_node,
-            end_node,
-            weight="routing_cost",
-        )
+        path = nx.shortest_path(graph, start_node, end_node, weight=weight)
     except nx.NetworkXNoPath as exc:
         raise RoutingError(
             "ROUTE_NOT_FOUND",
-            _no_path_message(routing_graph, start_node, end_node),
+            _no_path_message(graph, start_node, end_node),
         ) from exc
 
-    metrics = compute_route_metrics(routing_graph, path)
-    geometry = build_line_string(routing_graph, path)
+    metrics = compute_route_metrics(graph, path)
+    geometry = build_line_string(graph, path)
     return path, metrics, geometry
 
 

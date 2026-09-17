@@ -27,6 +27,8 @@ def _invalidate_city_derived_caches(city_id: str) -> None:
     if city_dir.exists():
         for overlay in city_dir.glob("bikeability-*.geojson.gz"):
             overlay.unlink(missing_ok=True)
+        for overlay in city_dir.glob("bikeability-*.pmtiles"):
+            overlay.unlink(missing_ok=True)
     try:
         from app.services.city_graph import reset_city_graph_caches
     except ImportError:

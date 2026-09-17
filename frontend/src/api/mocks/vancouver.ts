@@ -15,6 +15,7 @@ export const mockCities: CityListResponse = {
       },
       graphVersion: "1",
       scoreVersion: "2",
+      overlayVersion: "g1-s2-o11",
     },
     {
       cityId: "vancouver",
@@ -27,6 +28,7 @@ export const mockCities: CityListResponse = {
       },
       graphVersion: "unbuilt",
       scoreVersion: "2",
+      overlayVersion: "g1-s2-o11",
     },
   ],
 };

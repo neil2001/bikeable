@@ -1,3 +1,4 @@
+from app.routing.index import ROUTING_INDEX_KEY, RoutingIndex
 from app.services.city_graph import (
     OVERLAY_FORMAT_VERSION,
     _bike_graph_cache,
@@ -24,8 +25,8 @@ def test_bikeability_etag_changes_when_processed_graph_is_rebuilt(
     tmp_path, monkeypatch
 ) -> None:
     from app.config import settings
-    from app.graph.store import save_processed_graph
     from app.graph.fixture import build_tiny_graph
+    from app.graph.store import save_processed_graph
 
     monkeypatch.setattr(settings, "data_root", tmp_path)
     graph = build_tiny_graph()
@@ -52,6 +53,7 @@ def test_overlay_path_does_not_copy_bike_subgraph() -> None:
     if path.exists():
         path.unlink()
     get_bikeability_overlay_path("fixture")
+    assert path.read_bytes()[:7] == b"PMTiles"
     assert len(_scored_graph_cache) == 1
     assert len(_bike_graph_cache) == 0
 
@@ -77,6 +79,11 @@ def test_graph_caches_keep_two_city_slots(tmp_path, monkeypatch) -> None:
     assert len(_scored_graph_cache) == 2
     remaining_cities = {key[0] for key in _scored_graph_cache}
     assert remaining_cities == {"fixture", "vancouver"}
+
+
+def test_get_scored_graph_attaches_routing_index() -> None:
+    _scored, bike_graph = get_scored_graph("fixture")
+    assert isinstance(bike_graph.graph.get(ROUTING_INDEX_KEY), RoutingIndex)
 
 
 def test_routing_bike_copy_evicted_with_scored_graph(tmp_path, monkeypatch) -> None:

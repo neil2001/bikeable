@@ -1,22 +1,19 @@
 from fastapi import APIRouter, Request
-from fastapi.responses import FileResponse
 from starlette.responses import Response
 
 from app.api.errors import ApiError
 from app.models.common import ApiErrorCode
-from app.models.responses import (
-    BikeabilityNetworkResponse,
-    CityListResponse,
-    CitySummary,
-)
+from app.models.responses import CityListResponse, CitySummary
 from app.services.city_graph import (
     CityGraphUnavailableError,
     bikeability_etag,
-    get_bikeability_overlay_path,
+    get_bikeability_tile_mvt,
 )
 from app.services.city_registry import get_city_summary, list_city_summaries
 
 router = APIRouter()
+
+_TILE_CACHE_CONTROL = "public, max-age=86400, must-revalidate"
 
 
 @router.get("/cities", response_model=CityListResponse)
@@ -37,15 +34,14 @@ def get_city(cityId: str) -> CitySummary:
         ) from None
 
 
-@router.get(
-    "/cities/{cityId}/bikeability",
-    response_model=None,
-    responses={200: {"model": BikeabilityNetworkResponse}},
-)
-def get_city_bikeability(
+@router.get("/cities/{cityId}/bikeability/tiles/{z}/{x}/{y}.pbf")
+def get_city_bikeability_tile(
     request: Request,
     cityId: str,
-) -> FileResponse | Response:
+    z: int,
+    x: int,
+    y: int,
+) -> Response:
     try:
         get_city_summary(cityId)
     except KeyError:
@@ -57,7 +53,7 @@ def get_city_bikeability(
         ) from None
 
     try:
-        overlay_path = get_bikeability_overlay_path(cityId)
+        tile_bytes = get_bikeability_tile_mvt(cityId, z, x, y)
     except CityGraphUnavailableError as exc:
         raise ApiError(
             code=ApiErrorCode.GRAPH_UNAVAILABLE,
@@ -71,17 +67,25 @@ def get_city_bikeability(
         return Response(
             status_code=304,
             headers={
-                "Cache-Control": "public, max-age=0, must-revalidate",
+                "Cache-Control": _TILE_CACHE_CONTROL,
                 "ETag": etag,
             },
         )
 
-    return FileResponse(
-        overlay_path,
-        media_type="application/json",
+    if tile_bytes is None:
+        return Response(
+            status_code=204,
+            headers={
+                "Cache-Control": _TILE_CACHE_CONTROL,
+                "ETag": etag,
+            },
+        )
+
+    return Response(
+        content=tile_bytes,
+        media_type="application/vnd.mapbox-vector-tile",
         headers={
-            "Cache-Control": "public, max-age=0, must-revalidate",
+            "Cache-Control": _TILE_CACHE_CONTROL,
             "ETag": etag,
-            "Content-Encoding": "gzip",
         },
     )

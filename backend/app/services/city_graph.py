@@ -1,7 +1,7 @@
 import gzip
-import json
 from collections import OrderedDict
 from pathlib import Path
+from typing import Any
 
 import networkx as nx
 from app.config import settings
@@ -13,13 +13,17 @@ from app.graph.store import (
     processed_graph_paths,
     read_graph_metadata,
 )
+from app.routing.index import attach_routing_index
 from app.scoring.bike_graph import create_bike_graph
 from app.scoring.config import cached_scoring_config
 from app.scoring.score import score_graph
 from app.services.bikeability_map import graph_to_bikeability_geojson
+from app.services.bikeability_tiles import open_pmtiles_reader, write_overlay_pmtiles
+from pmtiles.reader import Reader
+from pmtiles.tile import Compression
 
 _CACHE_LIMIT = 2
-OVERLAY_FORMAT_VERSION = "10"
+OVERLAY_FORMAT_VERSION = "11"
 
 
 class CityGraphUnavailableError(Exception):
@@ -33,11 +37,15 @@ CacheKey = tuple[str, str, str]
 
 _scored_graph_cache: OrderedDict[CacheKey, nx.MultiDiGraph] = OrderedDict()
 _bike_graph_cache: OrderedDict[CacheKey, nx.MultiDiGraph] = OrderedDict()
+_pmtiles_reader_cache: dict[str, tuple[Path, Reader, Any]] = {}
 
 
 def reset_city_graph_caches() -> None:
     _scored_graph_cache.clear()
     _bike_graph_cache.clear()
+    for _city_id, (_path, _reader, handle) in list(_pmtiles_reader_cache.items()):
+        handle.close()
+    _pmtiles_reader_cache.clear()
 
 
 def city_graph_is_available(city_id: str) -> bool:
@@ -116,7 +124,9 @@ def get_scored_graph(city_id: str) -> tuple[nx.MultiDiGraph, nx.MultiDiGraph]:
         scored = score_graph(graph)
         _store_scored_graph(cache_key, scored)
 
-    bike_graph = create_bike_graph(scored, allow_walk_links=True)
+    bike_graph = attach_routing_index(
+        create_bike_graph(scored, allow_walk_links=True),
+    )
     _bike_graph_cache[cache_key] = bike_graph
     _touch_cache_key(cache_key)
     return scored, bike_graph
@@ -135,13 +145,20 @@ def get_scored_graph_for_bikeability(city_id: str) -> nx.MultiDiGraph:
     return scored
 
 
+def overlay_version(city_id: str) -> str:
+    _, graph_version, score_version = _cache_key(city_id)
+    return f"g{graph_version}-s{score_version}-o{OVERLAY_FORMAT_VERSION}"
+
+
 def overlay_cache_path(city_id: str) -> Path:
-    city_id_key, graph_version, score_version = _cache_key(city_id)
-    filename = (
-        f"bikeability-g{graph_version}"
-        f"-s{score_version}-o{OVERLAY_FORMAT_VERSION}.geojson.gz"
-    )
+    city_id_key, _graph_version, _score_version = _cache_key(city_id)
+    filename = f"bikeability-{overlay_version(city_id)}.pmtiles"
     return settings.processed_data_dir / city_id_key / filename
+
+
+def build_bikeability_overlay(city_id: str) -> Path:
+    """Score the graph and write the PMTiles overlay (idempotent)."""
+    return get_bikeability_overlay_path(city_id)
 
 
 def get_bikeability_overlay_path(city_id: str) -> Path:
@@ -155,12 +172,34 @@ def get_bikeability_overlay_path(city_id: str) -> Path:
         city_id=city_id,
         score_version=str(scored.graph.get("score_version", "2")),
     )
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = path.with_name(f"{path.name}.tmp")
-    with gzip.open(tmp_path, "wt", encoding="utf-8") as handle:
-        json.dump(payload, handle, separators=(",", ":"))
-    tmp_path.replace(path)
+    write_overlay_pmtiles(payload, path)
     return path
+
+
+def get_pmtiles_reader(city_id: str) -> Reader:
+    path = get_bikeability_overlay_path(city_id)
+    cached = _pmtiles_reader_cache.get(city_id)
+    if cached is not None and cached[0] == path:
+        return cached[1]
+
+    if cached is not None:
+        cached[2].close()
+
+    reader, handle = open_pmtiles_reader(path)
+    _pmtiles_reader_cache[city_id] = (path, reader, handle)
+    return reader
+
+
+def get_bikeability_tile_mvt(city_id: str, z: int, x: int, y: int) -> bytes | None:
+    """Return decompressed MVT bytes for a tile, or None if the tile is empty."""
+    reader = get_pmtiles_reader(city_id)
+    raw = reader.get(z, x, y)
+    if raw is None:
+        return None
+    header = reader.header()
+    if header["tile_compression"] == Compression.GZIP:
+        return gzip.decompress(raw)
+    return bytes(raw)
 
 
 def _overlay_bust_token(city_id: str) -> str:
