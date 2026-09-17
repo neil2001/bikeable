@@ -3,7 +3,7 @@ from app.features.builder import build_features
 from app.main import app
 from app.models.common import RoutePreferences
 from app.routing.cost import edge_routing_cost
-from app.scoring.config import RoutingCostParams, load_scoring_config
+from app.scoring.config import RoutingCostParams, get_profile, load_scoring_config
 from app.scoring.score import score_road
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
@@ -13,7 +13,6 @@ client = TestClient(app)
 VALID_SEGMENT = {
     "start": {"lat": 49.2800, "lon": -123.1200},
     "end": {"lat": 49.2820, "lon": -123.1000},
-    "profile": "road",
     "preferences": {"distanceWeight": 0.2, "bikeabilityWeight": 0.8},
 }
 
@@ -69,7 +68,7 @@ def test_superlinear_cost_prefers_park_over_broadway() -> None:
                 "length_m": 100.0,
             },
         ),
-        config.profiles["road"],
+        get_profile(config),
         config=config,
     )
     broadway = score_road(
@@ -83,7 +82,7 @@ def test_superlinear_cost_prefers_park_over_broadway() -> None:
                 "length_m": 100.0,
             },
         ),
-        config.profiles["road"],
+        get_profile(config),
         config=config,
     )
     park_cost = edge_routing_cost(100.0, park, prefs, routing=config.routing)

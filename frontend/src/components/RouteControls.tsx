@@ -1,6 +1,14 @@
 import { Download, LocateFixed, Map as MapIcon, Route, Settings } from "lucide-react";
 import type { PlannerMode } from "../hooks/usePlanner";
-import type { CitySummary, CyclingProfile } from "../types/api";
+import type { CitySummary } from "../types/api";
+import {
+  distanceMToInput,
+  inputToDistanceM,
+  loopDistanceInputLabel,
+  loopDistanceInputMax,
+  loopDistanceInputMin,
+  type UnitSystem,
+} from "../units";
 
 export type PanelTab = "plan" | "generate" | "settings";
 
@@ -9,14 +17,14 @@ type Props = {
   onTabChange: (tab: PanelTab) => void;
   mode: PlannerMode;
   setMode: (mode: PlannerMode) => void;
-  profile: CyclingProfile;
-  setProfile: (profile: CyclingProfile) => void;
   bikeabilityWeight: number;
   setBikeabilityWeight: (value: number) => void;
   heatmapOpacity: number;
   setHeatmapOpacity: (value: number) => void;
-  targetDistanceMi: number;
-  setTargetDistanceMi: (value: number) => void;
+  unitSystem: UnitSystem;
+  onUnitSystemChange: (units: UnitSystem) => void;
+  targetDistanceM: number;
+  setTargetDistanceM: (value: number) => void;
   cityId: string;
   setCityId: (cityId: string) => void;
   cities: CitySummary[];
@@ -25,7 +33,9 @@ type Props = {
   onLocate: () => void;
   onExport: () => void;
   onUndo: () => void;
+  onReturnToStart: () => void;
   onClear: () => void;
+  canReturnToStart: boolean;
   hasRoute: boolean;
   hasPlan: boolean;
   canUndo: boolean;
@@ -36,14 +46,14 @@ export function RouteControls({
   onTabChange,
   mode,
   setMode,
-  profile,
-  setProfile,
   bikeabilityWeight,
   setBikeabilityWeight,
   heatmapOpacity,
   setHeatmapOpacity,
-  targetDistanceMi,
-  setTargetDistanceMi,
+  unitSystem,
+  onUnitSystemChange,
+  targetDistanceM,
+  setTargetDistanceM,
   cityId,
   setCityId,
   cities,
@@ -52,7 +62,9 @@ export function RouteControls({
   onLocate,
   onExport,
   onUndo,
+  onReturnToStart,
   onClear,
+  canReturnToStart,
   hasRoute,
   hasPlan,
   canUndo,
@@ -94,6 +106,27 @@ export function RouteControls({
 
       {tab === "settings" ? (
         <>
+          <div className="unit-toggle" role="group" aria-label="Units">
+            <span className="unit-toggle-label">Units</span>
+            <div className="unit-toggle-buttons">
+              <button
+                type="button"
+                className={unitSystem === "imperial" ? "active" : ""}
+                aria-pressed={unitSystem === "imperial"}
+                onClick={() => onUnitSystemChange("imperial")}
+              >
+                mi / ft
+              </button>
+              <button
+                type="button"
+                className={unitSystem === "metric" ? "active" : ""}
+                aria-pressed={unitSystem === "metric"}
+                onClick={() => onUnitSystemChange("metric")}
+              >
+                km / m
+              </button>
+            </div>
+          </div>
           <label>
             Heatmap opacity ({Math.round(heatmapOpacity * 100)}%)
             <input
@@ -118,7 +151,8 @@ export function RouteControls({
             />
           </label>
           <p className="hint">
-            Opacity fades the road overlay. Bikeable weight trades shorter paths for quieter streets.
+            Units apply to distance, elevation, and road speed. Opacity fades the road overlay.
+            Bikeable weight trades shorter paths for quieter streets.
           </p>
         </>
       ) : (
@@ -133,27 +167,18 @@ export function RouteControls({
               ))}
             </select>
           </label>
-          <label>
-            Profile
-            <select
-              value={profile}
-              onChange={(event) => setProfile(event.target.value as CyclingProfile)}
-            >
-              <option value="road">Road</option>
-              <option value="commuter">Commuter</option>
-              <option value="leisure">Leisure</option>
-            </select>
-          </label>
           {mode === "auto" ? (
             <>
               <label>
-                Distance (mi)
+                {loopDistanceInputLabel(unitSystem)}
                 <input
                   type="number"
-                  min={5}
-                  max={100}
-                  value={targetDistanceMi}
-                  onChange={(event) => setTargetDistanceMi(Number(event.target.value))}
+                  min={loopDistanceInputMin(unitSystem)}
+                  max={loopDistanceInputMax(unitSystem)}
+                  value={distanceMToInput(targetDistanceM, unitSystem)}
+                  onChange={(event) =>
+                    setTargetDistanceM(inputToDistanceM(Number(event.target.value), unitSystem))
+                  }
                 />
               </label>
               <button type="button" className="primary" onClick={onGenerate} disabled={loading}>
@@ -163,27 +188,28 @@ export function RouteControls({
           ) : (
             <>
               <p className="hint">
-                Click a road to follow it. Stay on the same street to trace along it, or click a new
-                street to ride there. Click empty map to drop a stop.
+                First click drops Start; then click a road to follow it or empty map to add a stop.
               </p>
-              <div className="btn-row">
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={onUndo}
-                  disabled={!canUndo || loading}
-                >
-                  Undo last
-                </button>
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={onClear}
-                  disabled={!hasPlan || loading}
-                >
-                  Clear
-                </button>
-              </div>
+              {hasPlan ? (
+                <div className="btn-row">
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={onUndo}
+                    disabled={!canUndo || loading}
+                  >
+                    Undo last
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={onReturnToStart}
+                    disabled={!canReturnToStart || loading}
+                  >
+                    Return to start
+                  </button>
+                </div>
+              ) : null}
             </>
           )}
           <div className="btn-row">
@@ -198,6 +224,18 @@ export function RouteControls({
               </button>
             ) : null}
           </div>
+          {mode === "manual" ? (
+            <div className="btn-row">
+              <button
+                type="button"
+                className="secondary"
+                onClick={onClear}
+                disabled={!hasPlan || loading}
+              >
+                Clear
+              </button>
+            </div>
+          ) : null}
         </>
       )}
     </section>

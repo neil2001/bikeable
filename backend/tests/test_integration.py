@@ -8,7 +8,7 @@ def test_end_to_end_fixture_workflow() -> None:
     health = client.get("/api/v1/health")
     assert health.status_code == 200
 
-    network = client.get("/api/v1/cities/fixture/bikeability?profile=road")
+    network = client.get("/api/v1/cities/fixture/bikeability")
     assert network.status_code == 200
     assert network.json()["features"]
 
@@ -17,7 +17,6 @@ def test_end_to_end_fixture_workflow() -> None:
         json={
             "start": {"lat": 49.2800, "lon": -123.1200},
             "end": {"lat": 49.2820, "lon": -123.1000},
-            "profile": "road",
             "preferences": {"distanceWeight": 0.2, "bikeabilityWeight": 0.8},
         },
     )
@@ -28,7 +27,6 @@ def test_end_to_end_fixture_workflow() -> None:
         json={
             "start": {"lat": 49.2800, "lon": -123.1200},
             "targetDistanceM": 4900,
-            "profile": "road",
             "preferences": {"distanceWeight": 0.2, "bikeabilityWeight": 0.8},
             "constraints": {"minDistanceM": 4000, "maxDistanceM": 6000},
         },

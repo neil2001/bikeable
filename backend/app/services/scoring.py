@@ -11,7 +11,5 @@ __all__ = [
 ]
 
 
-def get_scored_city_graph(
-    city_graph: nx.MultiDiGraph, profile_id: str
-) -> nx.MultiDiGraph:
-    return score_graph(city_graph, profile_id)
+def get_scored_city_graph(city_graph: nx.MultiDiGraph) -> nx.MultiDiGraph:
+    return score_graph(city_graph)

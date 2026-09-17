@@ -16,6 +16,8 @@ SHARED_LANE_VALUES = {"share_busway"}
 SHARROW_VALUES = {"shared_lane", "sharrow"}
 NETWORK_YES_VALUES = {"yes", "true", "1"}
 ONEWAY_VALUES = {"yes", "true", "1", "-1"}
+PEDESTRIAN_HIGHWAYS = {"footway", "pedestrian", "steps"}
+BICYCLE_ALLOWED_ON_FOOTWAY = {"yes", "designated", "permissive"}
 
 
 def coerce_tag(value: Any) -> str | None:
@@ -25,6 +27,22 @@ def coerce_tag(value: Any) -> str | None:
         if not value:
             return None
         return coerce_tag(value[0])
+    text = str(value).strip()
+    return text or None
+
+
+def format_tag(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, (list, tuple, set)):
+        parts: list[str] = []
+        seen: set[str] = set()
+        for item in value:
+            text = format_tag(item)
+            if text and text not in seen:
+                seen.add(text)
+                parts.append(text)
+        return "; ".join(parts) or None
     text = str(value).strip()
     return text or None
 
@@ -200,6 +218,33 @@ def has_sharrow(edge_data: dict[str, Any]) -> bool:
     return any(tag in SHARROW_VALUES for tag in collect_cycleway_tags(edge_data))
 
 
+def is_unmarked_pedestrian_way(edge_data: dict[str, Any]) -> bool:
+    highway = normalize_highway_class(edge_data.get("highway"))
+    if highway not in PEDESTRIAN_HIGHWAYS:
+        return False
+    bicycle = normalize_bicycle_access(edge_data.get("bicycle"))
+    if bicycle == "no":
+        return False
+    if bicycle is None:
+        return True
+    return bicycle.lower() not in BICYCLE_ALLOWED_ON_FOOTWAY
+
+
+def is_private_driveway(edge_data: dict[str, Any]) -> bool:
+    if normalize_highway_class(edge_data.get("highway")) != "service":
+        return False
+    service = coerce_tag(edge_data.get("service"))
+    return service is not None and service.lower() == "driveway"
+
+
+def allows_cycling_on_way(edge_data: dict[str, Any]) -> bool:
+    if is_private_driveway(edge_data):
+        return False
+    if is_unmarked_pedestrian_way(edge_data):
+        return False
+    return True
+
+
 def is_traversable(edge_data: dict[str, Any]) -> bool:
     highway = normalize_highway_class(edge_data.get("highway"))
     if highway in {"motorway", "motorway_link"}:
@@ -216,4 +261,4 @@ def is_traversable(edge_data: dict[str, Any]) -> bool:
     if access == "private":
         return False
 
-    return True
+    return allows_cycling_on_way(edge_data)

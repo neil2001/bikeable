@@ -1,8 +1,10 @@
 from typing import Literal
 
+from pydantic import field_validator
+
+from app.features.normalize import format_tag
 from app.models.common import (
     ApiModel,
-    CyclingProfile,
     GeoJSONLineString,
 )
 
@@ -112,6 +114,11 @@ class RoadFeatureDiagnostics(ApiModel):
     bike_lane: bool
     grade: float | None = None
 
+    @field_validator("highway", "surface", "name", mode="before")
+    @classmethod
+    def _format_string_tags(cls, value: object) -> str | None:
+        return format_tag(value)
+
 
 class BikeabilityComponents(ApiModel):
     infrastructure: float
@@ -136,4 +143,3 @@ class RoadInspectionResponse(ApiModel):
     geometry: GeoJSONLineString
     features: RoadFeatureDiagnostics
     bikeability: RoadBikeabilityDetail
-    profile: CyclingProfile

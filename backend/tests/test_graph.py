@@ -166,6 +166,8 @@ def test_keep_ingest_edge_drops_motorway_and_private() -> None:
     assert keep_ingest_edge({"highway": "residential"})
     assert keep_ingest_edge({"highway": "cycleway"})
     assert keep_ingest_edge({"highway": "footway"})
+    assert keep_ingest_edge({"highway": "service", "service": "alley"})
+    assert not keep_ingest_edge({"highway": "service", "service": "driveway"})
     assert not keep_ingest_edge({"highway": "motorway"})
     assert not keep_ingest_edge({"highway": "residential", "bicycle": "no"})
     assert not keep_ingest_edge({"highway": "residential", "access": "private"})

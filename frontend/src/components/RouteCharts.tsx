@@ -8,30 +8,22 @@ import {
   YAxis,
 } from "recharts";
 import type { RouteResponse } from "../types/api";
-
-const METERS_TO_FEET = 3.28084;
+import { formatDistance, formatElevation, type UnitSystem } from "../units";
 
 type Props = {
   route: RouteResponse | null;
   cursorDistanceM: number | null;
   onCursorChange: (distanceM: number | null) => void;
+  unitSystem: UnitSystem;
 };
 
 type ChartPoint = {
   distanceM: number;
-  elevationFt: number | null;
+  elevation: number | null;
   bikeability: number;
 };
 
-function formatMiles(distanceM: number): string {
-  return `${(distanceM / 1609.34).toFixed(1)} mi`;
-}
-
-function formatFeet(value: number): string {
-  return `${Math.round(value)} ft`;
-}
-
-export function RouteCharts({ route, cursorDistanceM, onCursorChange }: Props) {
+export function RouteCharts({ route, cursorDistanceM, onCursorChange, unitSystem }: Props) {
   if (!route || route.profile.length === 0) {
     return null;
   }
@@ -39,10 +31,12 @@ export function RouteCharts({ route, cursorDistanceM, onCursorChange }: Props) {
   const hasElevation = route.profile.some((sample) => sample.elevationM != null);
   const chartData: ChartPoint[] = route.profile.map((sample) => ({
     distanceM: sample.distanceM,
-    elevationFt:
-      sample.elevationM == null ? null : sample.elevationM * METERS_TO_FEET,
+    elevation: sample.elevationM,
     bikeability: sample.bikeability,
   }));
+
+  const formatDistanceTick = (distanceM: number) => formatDistance(distanceM, unitSystem);
+  const formatElevationTick = (elevationM: number) => formatElevation(elevationM, unitSystem);
 
   const handleCursor = (state: { activeTooltipIndex?: unknown }) => {
     const index = state?.activeTooltipIndex;
@@ -59,7 +53,7 @@ export function RouteCharts({ route, cursorDistanceM, onCursorChange }: Props) {
         <h3>Elevation</h3>
         <p className="chart-summary">
           {hasElevation
-            ? `Elevation gain: ${Math.round(route.elevationGainM * METERS_TO_FEET)} ft.`
+            ? `Elevation gain: ${formatElevation(route.elevationGainM, unitSystem)}.`
             : "Elevation data is unavailable for this route."}
         </p>
         {hasElevation ? (
@@ -70,15 +64,15 @@ export function RouteCharts({ route, cursorDistanceM, onCursorChange }: Props) {
               onMouseLeave={() => onCursorChange(null)}
             >
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="distanceM" tickFormatter={formatMiles} />
-              <YAxis tickFormatter={(value) => `${Math.round(Number(value))}`} />
+              <XAxis dataKey="distanceM" tickFormatter={formatDistanceTick} />
+              <YAxis tickFormatter={(value) => formatElevationTick(Number(value))} />
               <Tooltip
-                labelFormatter={(value) => formatMiles(Number(value))}
-                formatter={(value) => [formatFeet(Number(value)), "Elevation"]}
+                labelFormatter={(value) => formatDistanceTick(Number(value))}
+                formatter={(value) => [formatElevationTick(Number(value)), "Elevation"]}
               />
               <Line
                 type="monotone"
-                dataKey="elevationFt"
+                dataKey="elevation"
                 stroke="#2563eb"
                 dot={false}
                 connectNulls
@@ -99,10 +93,10 @@ export function RouteCharts({ route, cursorDistanceM, onCursorChange }: Props) {
             onMouseLeave={() => onCursorChange(null)}
           >
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="distanceM" tickFormatter={formatMiles} />
+            <XAxis dataKey="distanceM" tickFormatter={formatDistanceTick} />
             <YAxis domain={[0, 10]} />
             <Tooltip
-              labelFormatter={(value) => formatMiles(Number(value))}
+              labelFormatter={(value) => formatDistanceTick(Number(value))}
               formatter={(value) => [Number(value).toFixed(2), "Bikeability"]}
             />
             <Line type="monotone" dataKey="bikeability" stroke="#059669" dot={false} />
@@ -110,7 +104,9 @@ export function RouteCharts({ route, cursorDistanceM, onCursorChange }: Props) {
         </ResponsiveContainer>
       </section>
       {cursorDistanceM !== null ? (
-        <p className="chart-summary">Selected distance: {formatMiles(cursorDistanceM)}</p>
+        <p className="chart-summary">
+          Selected distance: {formatDistance(cursorDistanceM, unitSystem)}
+        </p>
       ) : null}
     </div>
   );

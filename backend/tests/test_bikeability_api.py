@@ -1,19 +1,31 @@
 import networkx as nx
 from app.features.apply import apply_features_to_graph
 from app.main import app
-from app.models.common import CyclingProfile
 from app.scoring.score import score_graph
+from app.services.city_graph import OVERLAY_FORMAT_VERSION
 from app.services.road_inspection import inspect_road
 from fastapi.testclient import TestClient
 
 client = TestClient(app)
 
 
+def test_bikeability_returns_304_when_etag_matches() -> None:
+    first = client.get("/api/v1/cities/fixture/bikeability")
+    etag = first.headers["etag"]
+    second = client.get(
+        "/api/v1/cities/fixture/bikeability",
+        headers={"If-None-Match": etag},
+    )
+    assert second.status_code == 304
+    assert second.headers.get("etag") == etag
+    assert second.content == b"" or not second.content
+
+
 def test_bikeability_network_for_fixture_city() -> None:
-    response = client.get("/api/v1/cities/fixture/bikeability?profile=road")
+    response = client.get("/api/v1/cities/fixture/bikeability")
     assert response.status_code == 200
     assert "etag" in response.headers
-    assert "-4-road" in response.headers["etag"]
+    assert f"-{OVERLAY_FORMAT_VERSION}-" in response.headers["etag"]
     payload = response.json()
     assert payload["cityId"] == "fixture"
     assert payload["scoreVersion"] == "2"
@@ -45,18 +57,18 @@ def test_inspect_expands_dropped_skip_edge() -> None:
         length_m=1360.0,
         name="Northwest Marine Drive",
     )
-    scored = score_graph(apply_features_to_graph(graph), "road")
-    inspection = inspect_road(scored, "10:30:0", CyclingProfile.ROAD)
+    scored = score_graph(apply_features_to_graph(graph))
+    inspection = inspect_road(scored, "10:30:0")
     assert len(inspection.geometry.coordinates) >= 3
     assert inspection.road_id == "10:20:0"
     assert inspection.features.name == "Northwest Marine Drive"
 
 
 def test_road_inspection_returns_score_components() -> None:
-    network = client.get("/api/v1/cities/fixture/bikeability?profile=road").json()
+    network = client.get("/api/v1/cities/fixture/bikeability").json()
     road_id = network["features"][0]["properties"]["roadId"]
     response = client.get(
-        f"/api/v1/roads/{road_id}?cityId=fixture&profile=road",
+        f"/api/v1/roads/{road_id}?cityId=fixture",
     )
     assert response.status_code == 200
     payload = response.json()
@@ -68,3 +80,43 @@ def test_road_inspection_returns_score_components() -> None:
     assert "environment" in components
     assert "context" in components
     assert isinstance(payload["bikeability"]["reasons"], list)
+
+
+def test_inspect_road_surface_list_formatted() -> None:
+    graph = nx.MultiDiGraph()
+    graph.graph["crs"] = "EPSG:32610"
+    graph.add_node(1, lat=49.27, lon=-123.12, x=0.0, y=0.0)
+    graph.add_node(2, lat=49.27, lon=-123.11, x=100.0, y=0.0)
+    graph.add_edge(
+        1,
+        2,
+        key=0,
+        highway="residential",
+        length_m=100.0,
+        surface=["concrete", "paved"],
+        name="Test Lane",
+    )
+    scored = score_graph(apply_features_to_graph(graph))
+    inspection = inspect_road(scored, "1:2:0")
+    assert inspection.features.surface is not None
+    assert "concrete" in inspection.features.surface
+    assert "paved" in inspection.features.surface
+
+
+def test_inspect_road_surface_string_unchanged() -> None:
+    graph = nx.MultiDiGraph()
+    graph.graph["crs"] = "EPSG:32610"
+    graph.add_node(1, lat=49.27, lon=-123.12, x=0.0, y=0.0)
+    graph.add_node(2, lat=49.27, lon=-123.11, x=100.0, y=0.0)
+    graph.add_edge(
+        1,
+        2,
+        key=0,
+        highway="residential",
+        length_m=100.0,
+        surface="asphalt",
+        name="Asphalt Lane",
+    )
+    scored = score_graph(apply_features_to_graph(graph))
+    inspection = inspect_road(scored, "1:2:0")
+    assert inspection.features.surface == "asphalt"

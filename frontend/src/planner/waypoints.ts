@@ -12,6 +12,38 @@ export type PlanSnapshot = {
   route: RouteResponse | null;
 };
 
+const EARTH_RADIUS_M = 6371000;
+const ROUTE_CLOSED_THRESHOLD_M = 28;
+
+function toRadians(degrees: number): number {
+  return (degrees * Math.PI) / 180;
+}
+
+export function distanceMeters(a: Coordinate, b: Coordinate): number {
+  const dLat = toRadians(b.lat - a.lat);
+  const dLon = toRadians(b.lon - a.lon);
+  const lat1 = toRadians(a.lat);
+  const lat2 = toRadians(b.lat);
+  const sinDLat = Math.sin(dLat / 2);
+  const sinDLon = Math.sin(dLon / 2);
+  const h = sinDLat * sinDLat + Math.cos(lat1) * Math.cos(lat2) * sinDLon * sinDLon;
+  return 2 * EARTH_RADIUS_M * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+export function isRouteClosedToStart(
+  route: RouteResponse | null,
+  startCoord: Coordinate,
+  thresholdM = ROUTE_CLOSED_THRESHOLD_M,
+): boolean {
+  const coordinates = route?.geometry.coordinates;
+  if (!coordinates || coordinates.length === 0) {
+    return false;
+  }
+  const last = coordinates[coordinates.length - 1];
+  const end = { lon: last[0], lat: last[1] };
+  return distanceMeters(startCoord, end) <= thresholdM;
+}
+
 export function createWaypoint(coordinate: Coordinate, label: string): Waypoint {
   const id = globalThis.crypto?.randomUUID?.() ?? `wp_${Date.now()}_${Math.random().toString(16).slice(2)}`;
   return { id, coordinate, label };

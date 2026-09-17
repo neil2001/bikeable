@@ -7,7 +7,11 @@ from typing import Any
 import networkx as nx
 import osmnx as ox
 
-from app.features.normalize import coerce_tag, normalize_highway_class
+from app.features.normalize import (
+    coerce_tag,
+    is_private_driveway,
+    normalize_highway_class,
+)
 from app.graph.extract import OsmExtractError, has_usable_extract, resolve_osm_xml
 from app.graph.registry import CityDefinition
 from app.graph.types import BBox
@@ -27,6 +31,7 @@ EXTRA_WAY_TAGS = (
     "foot",
     "segregated",
     "motor_vehicle",
+    "footway",
 )
 
 EXCLUDED_HIGHWAYS = {
@@ -130,6 +135,8 @@ def keep_ingest_edge(edge_data: dict[str, Any]) -> bool:
     if coerce_tag(edge_data.get("bicycle")) == "no":
         return False
     if coerce_tag(edge_data.get("access")) == "private":
+        return False
+    if is_private_driveway(edge_data):
         return False
     return True
 

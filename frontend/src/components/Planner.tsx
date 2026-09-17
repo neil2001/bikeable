@@ -3,6 +3,11 @@ import { useEffect, useMemo, useState } from "react";
 import { getDefaultCityId } from "../api/client";
 import { usePlanner } from "../hooks/usePlanner";
 import { MapView } from "../map/MapView";
+import {
+  readStoredUnitSystem,
+  writeStoredUnitSystem,
+  type UnitSystem,
+} from "../units";
 import { BikeabilityLegend } from "./BikeabilityLegend";
 import { RoadInspector } from "./RoadInspector";
 import { RouteCharts } from "./RouteCharts";
@@ -20,6 +25,12 @@ export function Planner() {
   const [bikeabilityMax, setBikeabilityMax] = useState(10);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [panelTab, setPanelTab] = useState<PanelTab>("plan");
+  const [unitSystem, setUnitSystem] = useState<UnitSystem>(readStoredUnitSystem);
+
+  const handleUnitSystemChange = (next: UnitSystem) => {
+    setUnitSystem(next);
+    writeStoredUnitSystem(next);
+  };
 
   const mapCenter = planner.start ?? planner.waypoints[0]?.coordinate ?? DEFAULT_CENTER;
   const routeCoordinates = useMemo(() => {
@@ -64,7 +75,6 @@ export function Planner() {
           center={mapCenter}
           cityBbox={planner.selectedCity?.bbox}
           heatmapCityId={planner.cityId}
-          heatmapProfile={planner.profile}
           routeCoordinates={routeCoordinates}
           waypoints={planner.waypoints}
           selectedRoadIds={planner.selectedRoadIds}
@@ -101,7 +111,7 @@ export function Planner() {
         </div>
         <p className="subtitle">
           {planner.mode === "manual"
-            ? "Click a road to follow it, or drop a stop on the map."
+            ? "First click drops Start; then click a road to follow it or empty map to add a stop."
             : "Click a start, then generate a loop."}
         </p>
       </header>
@@ -135,14 +145,14 @@ export function Planner() {
           onTabChange={setPanelTab}
           mode={planner.mode}
           setMode={planner.setMode}
-          profile={planner.profile}
-          setProfile={planner.setProfile}
           bikeabilityWeight={planner.bikeabilityWeight}
           setBikeabilityWeight={planner.setBikeabilityWeight}
           heatmapOpacity={heatmapOpacity}
           setHeatmapOpacity={setHeatmapOpacity}
-          targetDistanceMi={planner.targetDistanceMi}
-          setTargetDistanceMi={planner.setTargetDistanceMi}
+          unitSystem={unitSystem}
+          onUnitSystemChange={handleUnitSystemChange}
+          targetDistanceM={planner.targetDistanceM}
+          setTargetDistanceM={planner.setTargetDistanceM}
           cityId={planner.cityId}
           setCityId={planner.setCityId}
           cities={planner.cities}
@@ -151,7 +161,9 @@ export function Planner() {
           onLocate={planner.useCurrentLocation}
           onExport={() => void planner.exportRoute()}
           onUndo={planner.undoPlan}
+          onReturnToStart={() => void planner.returnToStart()}
           onClear={planner.clearPlan}
+          canReturnToStart={planner.canReturnToStart}
           hasRoute={Boolean(planner.route)}
           hasPlan={planner.waypoints.length > 0 || planner.selectedRoadIds.length > 0}
           canUndo={planner.canUndo}
@@ -167,17 +179,19 @@ export function Planner() {
           />
         ) : null}
 
-        <RouteSummary route={planner.route} />
+        <RouteSummary route={planner.route} unitSystem={unitSystem} />
 
         <RouteCharts
           route={planner.route}
           cursorDistanceM={planner.cursorDistanceM}
           onCursorChange={planner.setCursorDistanceM}
+          unitSystem={unitSystem}
         />
 
         <RoadInspector
           inspection={planner.roadInspection}
           onClose={() => planner.setRoadInspection(null)}
+          unitSystem={unitSystem}
         />
       </aside>
     </div>

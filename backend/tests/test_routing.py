@@ -13,7 +13,7 @@ def _preferences(*, distance_weight: float) -> RoutePreferences:
 
 
 def test_bikeability_preference_avoids_primary_shortcut() -> None:
-    graph = score_graph(apply_features_to_graph(build_tiny_graph()), "road")
+    graph = score_graph(apply_features_to_graph(build_tiny_graph()))
     start = Coordinate(lat=49.2800, lon=-123.1200)
     end = Coordinate(lat=49.2820, lon=-123.1000)
     _path, metrics, _geometry = route_point_to_point(
@@ -28,7 +28,7 @@ def test_bikeability_preference_avoids_primary_shortcut() -> None:
 
 
 def test_distance_preference_uses_primary_shortcut() -> None:
-    graph = score_graph(apply_features_to_graph(build_tiny_graph()), "road")
+    graph = score_graph(apply_features_to_graph(build_tiny_graph()))
     start = Coordinate(lat=49.2800, lon=-123.1200)
     end = Coordinate(lat=49.2820, lon=-123.1000)
     _path, metrics, _geometry = route_point_to_point(
@@ -41,7 +41,7 @@ def test_distance_preference_uses_primary_shortcut() -> None:
 
 
 def test_unreachable_route_raises() -> None:
-    graph = score_graph(apply_features_to_graph(build_tiny_graph()), "road")
+    graph = score_graph(apply_features_to_graph(build_tiny_graph()))
     graph.add_node(99, lat=49.2810, lon=-123.1210, x=-80.0, y=80.0)
     graph.add_node(100, lat=49.2815, lon=-123.1215, x=-120.0, y=120.0)
     graph.add_edge(
@@ -65,7 +65,7 @@ def test_unreachable_route_raises() -> None:
 
 
 def test_far_from_network_raises_invalid_coordinates() -> None:
-    graph = score_graph(apply_features_to_graph(build_tiny_graph()), "road")
+    graph = score_graph(apply_features_to_graph(build_tiny_graph()))
     import pytest
     from app.routing.point_to_point import RoutingError
 
@@ -89,7 +89,6 @@ def test_segment_api_returns_geometry() -> None:
         json={
             "start": {"lat": 49.2800, "lon": -123.1200},
             "end": {"lat": 49.2820, "lon": -123.1000},
-            "profile": "road",
             "preferences": {"distanceWeight": 0.2, "bikeabilityWeight": 0.8},
         },
     )

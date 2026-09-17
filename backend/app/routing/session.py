@@ -159,14 +159,12 @@ def quantize_distance_weight(distance_weight: float) -> float:
 
 def preference_cache_key(
     city_id: str,
-    profile_id: str,
     graph_version: str,
     score_version: str,
     preferences: RoutePreferences,
-) -> tuple[str, str, str, str, float]:
+) -> tuple[str, str, str, float]:
     return (
         city_id,
-        profile_id,
         graph_version,
         score_version,
         quantize_distance_weight(preferences.distance_weight),

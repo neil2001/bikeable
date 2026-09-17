@@ -27,6 +27,7 @@ frontend/src/
 ├── components/              Planner shell, controls, summary, charts, inspector, legend
 ├── hooks/usePlanner.ts      Modes, waypoints, selected roads, API calls
 ├── planner/                 Waypoint helpers for the unified Plan mode
+├── units.ts                 Display formatters and unit preference storage
 ├── map/                     MapLibre view, style, colors, trace helpers
 └── types/api.ts             CamelCase types matching the backend
 ```
@@ -75,7 +76,9 @@ Failures parse `{ error: { code, message, details } }` into `ApiClientError` ([`
 
 [`usePlanner`](../frontend/src/hooks/usePlanner.ts) modes: `manual` | `auto`. The panel tabs Plan / Generate / Settings map onto those (`Settings` does not change mode).
 
-Shared state: city, cycling profile (`road` | `commuter` | `leisure`), bikeability vs distance weight (default 80% bikeable), target loop distance (default 30 mi), current `RouteResponse`, loading/error, road inspection.
+Shared state: city, bikeability vs distance weight (default 80% bikeable), target loop distance stored as meters (default ~30 mi), current `RouteResponse`, loading/error, road inspection.
+
+Display units default to **imperial** (mi, ft, mph). The Settings tab toggles **metric** (km, m, km/h); the choice is saved in `localStorage` under `bikeable.unitSystem`. The API always uses meters and kph; only labels and formatters change.
 
 Switching mode or city clears the route, selected roads, and waypoints.
 
@@ -94,7 +97,7 @@ Overlay features are **undirected** (one LineString per two-way street). Directe
 
 ### Generate (`auto`)
 
-Click the map to set a start (`S` marker, draggable). **Generate route** calls `generateLoop` with target miles converted to meters and ±15% distance constraints.
+Click the map to set a start (`S` marker, draggable). **Generate route** calls `generateLoop` with the target distance in meters (from the Generate input, converted from mi or km) and ±15% distance constraints.
 
 ## Map
 
@@ -116,11 +119,11 @@ MapLibre needs WebGL. Headless / GPU-less environments often show a blank canvas
 | Component | Role |
 | --- | --- |
 | `Planner` | Full-screen map, floating header, collapsible side panel, heatmap legend |
-| `RouteControls` | Tabs, city/profile, mode-specific actions, locate, export GPX |
+| `RouteControls` | Tabs, city, mode-specific actions, units toggle, locate, export GPX |
 | `WaypointList` | Plan-mode stops: reorder, delete, focus |
-| `RouteSummary` | Distance (mi), average bikeability / 10, elevation gain (ft), % high quality |
-| `RouteCharts` | Elevation and bikeability vs distance (hides elevation if all samples are null) |
-| `RoadInspector` | Score, highway, speed, surface, protected infra, scoring reasons |
+| `RouteSummary` | Distance, average bikeability / 10, elevation gain, % high quality (units from Settings) |
+| `RouteCharts` | Elevation and bikeability vs distance (hides elevation if all samples are null; axes follow Settings units) |
+| `RoadInspector` | Score, highway, speed, surface, protected infra, scoring reasons (speed follows Settings units) |
 | `BikeabilityLegend` | Toggle overlay + min/max filter |
 
 On narrow viewports the panel becomes a bottom sheet ([`App.css`](../frontend/src/App.css)).

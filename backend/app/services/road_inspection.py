@@ -1,6 +1,6 @@
 import networkx as nx
 from app.features.apply import read_features_from_edge
-from app.models.common import CyclingProfile
+from app.features.normalize import format_tag
 from app.models.responses import (
     BikeabilityComponents,
     RoadBikeabilityDetail,
@@ -19,7 +19,6 @@ from app.scoring.score import score_road_detailed
 def inspect_road(
     graph: nx.MultiDiGraph,
     road_id: str,
-    profile: CyclingProfile,
 ) -> RoadInspectionResponse:
     source, target, key = parse_road_id(road_id)
     try:
@@ -37,7 +36,7 @@ def inspect_road(
     scoring = load_scoring_config()
     breakdown = score_road_detailed(
         features,
-        get_profile(profile.value, scoring),
+        get_profile(scoring),
         config=scoring,
     )
     coordinates = edges_to_coordinates(graph, edges)
@@ -57,7 +56,7 @@ def inspect_road(
             highway=features.highway_class,
             speed_kph=features.speed_kph,
             lanes=features.lane_count,
-            surface=edge_data.get("surface"),
+            surface=format_tag(edge_data.get("surface")),
             name=edge_display_name(edge_data),
             osmid=json_osmid(edge_data.get("osmid")),
             protected_bike_infrastructure=features.protected_infrastructure,
@@ -79,5 +78,4 @@ def inspect_road(
             ),
             reasons=reasons,
         ),
-        profile=profile,
     )

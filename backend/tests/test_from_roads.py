@@ -14,7 +14,7 @@ client = TestClient(app)
 def test_from_roads_assembles_connected_fixture_walk() -> None:
     response = client.post(
         "/api/v1/routes/from-roads?cityId=fixture",
-        json={"roadIds": ["1:2:0", "2:3:0"], "profile": "road"},
+        json={"roadIds": ["1:2:0", "2:3:0"]},
     )
     assert response.status_code == 200
     payload = response.json()
@@ -28,28 +28,29 @@ def test_from_roads_assembles_connected_fixture_walk() -> None:
     assert b"<gpx" in gpx.content
 
 
-def test_from_roads_skips_elevation_lookup(monkeypatch) -> None:
-    def fail_if_called(*_args, **_kwargs):
-        raise AssertionError("sample_path_elevations should not run for from-roads")
+def test_from_roads_includes_elevation_profile(monkeypatch) -> None:
+    from app.config import settings
 
+    monkeypatch.setattr(settings, "elevation_provider", "open_meteo")
     monkeypatch.setattr(
         "app.services.routing.sample_path_elevations",
-        fail_if_called,
+        lambda _graph, path: [20.0 + index * 3.0 for index, _node in enumerate(path)],
     )
     response = client.post(
         "/api/v1/routes/from-roads?cityId=fixture",
-        json={"roadIds": ["1:2:0"], "profile": "road"},
+        json={"roadIds": ["1:2:0"]},
     )
     assert response.status_code == 200
     payload = response.json()
-    assert payload["elevationGainM"] == 0.0
-    assert all(sample["elevationM"] is None for sample in payload["profile"])
+    assert payload["profile"]
+    assert all(sample["elevationM"] is not None for sample in payload["profile"])
+    assert payload["elevationGainM"] > 0
 
 
 def test_from_roads_rejects_disconnected_roads() -> None:
     response = client.post(
         "/api/v1/routes/from-roads?cityId=fixture",
-        json={"roadIds": ["1:2:0", "3:4:0"], "profile": "road"},
+        json={"roadIds": ["1:2:0", "3:4:0"]},
     )
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "INVALID_REQUEST"
@@ -58,7 +59,7 @@ def test_from_roads_rejects_disconnected_roads() -> None:
 def test_from_roads_rejects_unknown_road() -> None:
     response = client.post(
         "/api/v1/routes/from-roads?cityId=fixture",
-        json={"roadIds": ["99:100:0"], "profile": "road"},
+        json={"roadIds": ["99:100:0"]},
     )
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "INVALID_REQUEST"
@@ -83,7 +84,7 @@ def test_from_roads_expands_dropped_skip_edge() -> None:
         length_m=1360.0,
         name="Northwest Marine Drive",
     )
-    scored = score_graph(apply_features_to_graph(graph), "road")
+    scored = score_graph(apply_features_to_graph(graph))
 
     edges = _edges_from_road_ids(scored, ["10:30:0"])
     assert edges == [(10, 20, 0), (20, 30, 0)]
@@ -92,7 +93,7 @@ def test_from_roads_expands_dropped_skip_edge() -> None:
 def test_from_roads_rejects_invalid_road_id() -> None:
     response = client.post(
         "/api/v1/routes/from-roads?cityId=fixture",
-        json={"roadIds": ["not-a-road"], "profile": "road"},
+        json={"roadIds": ["not-a-road"]},
     )
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "INVALID_REQUEST"
@@ -124,7 +125,7 @@ def _parallel_edge_graph() -> nx.MultiDiGraph:
         geometry=detour,
         osmid=101,
     )
-    return score_graph(apply_features_to_graph(graph), "road")
+    return score_graph(apply_features_to_graph(graph))
 
 
 def test_from_roads_uses_parallel_edge_geometry_for_requested_key(monkeypatch) -> None:
@@ -137,12 +138,12 @@ def test_from_roads_uses_parallel_edge_geometry_for_requested_key(monkeypatch) -
 
     monkeypatch.setattr(
         "app.services.routing.get_scored_graph",
-        lambda _city_id, _profile: (scored, scored),
+        lambda _city_id: (scored, scored),
     )
 
     response = client.post(
         "/api/v1/routes/from-roads?cityId=fixture",
-        json={"roadIds": ["1:2:1"], "profile": "road"},
+        json={"roadIds": ["1:2:1"]},
     )
     assert response.status_code == 200
     assert response.json()["geometry"]["coordinates"] == coords_key_1
@@ -150,14 +151,14 @@ def test_from_roads_uses_parallel_edge_geometry_for_requested_key(monkeypatch) -
 
 def test_from_roads_resolves_reverse_orientation_with_matching_osmid() -> None:
     graph = apply_features_to_graph(build_tiny_graph())
-    scored = score_graph(graph, "road")
+    scored = score_graph(graph)
     edge_data = scored.get_edge_data(1, 2, 0)
     assert edge_data is not None
     forward = edge_to_wgs84_coordinates(scored, 1, 2, edge_data)
 
     response = client.post(
         "/api/v1/routes/from-roads?cityId=fixture",
-        json={"roadIds": ["2:1:0"], "profile": "road"},
+        json={"roadIds": ["2:1:0"]},
     )
     assert response.status_code == 200
     reverse = response.json()["geometry"]["coordinates"]

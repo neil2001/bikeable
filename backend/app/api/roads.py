@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Query
 
 from app.api.errors import ApiError
-from app.models.common import ApiErrorCode, CyclingProfile
+from app.models.common import ApiErrorCode
 from app.models.responses import RoadInspectionResponse
 from app.services.city_graph import CityGraphUnavailableError, get_scored_graph
 from app.services.city_registry import resolve_city_id
@@ -14,12 +14,11 @@ router = APIRouter()
 def inspect_road_endpoint(
     roadId: str,
     cityId: str = Query(default="fixture"),
-    profile: CyclingProfile = CyclingProfile.ROAD,
 ) -> RoadInspectionResponse:
     resolved_city = resolve_city_id(cityId)
     try:
-        graph, _bike_graph = get_scored_graph(resolved_city, profile.value)
-        return inspect_road(graph, roadId, profile)
+        graph, _bike_graph = get_scored_graph(resolved_city)
+        return inspect_road(graph, roadId)
     except CityGraphUnavailableError as exc:
         raise ApiError(
             code=ApiErrorCode.GRAPH_UNAVAILABLE,

@@ -1,10 +1,12 @@
 import type { RouteResponse } from "../types/api";
+import { formatDistance, formatElevation, type UnitSystem } from "../units";
 
 type Props = {
   route: RouteResponse | null;
+  unitSystem: UnitSystem;
 };
 
-export function RouteSummary({ route }: Props) {
+export function RouteSummary({ route, unitSystem }: Props) {
   if (!route) {
     return <p className="summary placeholder">No route yet.</p>;
   }
@@ -13,7 +15,7 @@ export function RouteSummary({ route }: Props) {
     <dl className="summary">
       <div>
         <dt>Distance</dt>
-        <dd>{(route.distanceM / 1609.34).toFixed(1)} mi</dd>
+        <dd>{formatDistance(route.distanceM, unitSystem)}</dd>
       </div>
       <div>
         <dt>Bikeability</dt>
@@ -21,7 +23,7 @@ export function RouteSummary({ route }: Props) {
       </div>
       <div>
         <dt>Elevation</dt>
-        <dd>+{Math.round(route.elevationGainM * 3.28084)} ft</dd>
+        <dd>+{formatElevation(route.elevationGainM, unitSystem)}</dd>
       </div>
       <div>
         <dt>High quality</dt>

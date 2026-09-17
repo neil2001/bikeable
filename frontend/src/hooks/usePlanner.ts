@@ -13,16 +13,17 @@ import { detectTraceClick } from "../map/tracePath";
 import {
   applyExtensionToWaypoints,
   createWaypoint,
+  isRouteClosedToStart,
   moveWaypointAt,
   removeWaypointAt,
   reorderWaypoints,
   type PlanSnapshot,
   type Waypoint,
 } from "../planner/waypoints";
+import { defaultLoopTargetDistanceM } from "../units";
 import type {
   CitySummary,
   Coordinate,
-  CyclingProfile,
   RoadInspectionResponse,
   RouteResponse,
 } from "../types/api";
@@ -44,9 +45,8 @@ export function usePlanner() {
   const [cityId, setCityId] = useState(getDefaultCityId());
   const [cities, setCities] = useState<CitySummary[]>([]);
   const [mode, setMode] = useState<PlannerMode>("manual");
-  const [profile, setProfile] = useState<CyclingProfile>("road");
   const [bikeabilityWeight, setBikeabilityWeight] = useState(0.8);
-  const [targetDistanceMi, setTargetDistanceMi] = useState(30);
+  const [targetDistanceM, setTargetDistanceM] = useState(defaultLoopTargetDistanceM);
   const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
   const [selectedRoadIds, setSelectedRoadIds] = useState<string[]>([]);
   const [start, setStart] = useState<Coordinate | null>(null);
@@ -165,7 +165,6 @@ export function usePlanner() {
         const response = await routeManual(
           {
             waypoints: points.map((point) => point.coordinate),
-            profile,
             preferences,
           },
           cityId,
@@ -181,8 +180,63 @@ export function usePlanner() {
         setLoading(false);
       }
     },
-    [applyRouteResult, cityId, preferences, profile],
+    [applyRouteResult, cityId, preferences],
   );
+
+  const startCoordinate = waypoints[0]?.coordinate ?? start;
+
+  const canReturnToStart = useMemo(() => {
+    if (!startCoordinate) {
+      return false;
+    }
+    const hasPath = selectedRoadIds.length > 0 || route !== null;
+    if (!hasPath) {
+      return false;
+    }
+    return !isRouteClosedToStart(route, startCoordinate);
+  }, [route, selectedRoadIds.length, startCoordinate]);
+
+  const returnToStart = useCallback(async () => {
+    if (!canReturnToStart || !startCoordinate || extendInFlightRef.current) {
+      return;
+    }
+    extendInFlightRef.current = true;
+    setLoading(true);
+    setError(null);
+    const snapshot = currentSnapshot();
+    try {
+      const response = await traceExtend(
+        {
+          selectedRoadIds,
+          clicked: startCoordinate,
+          start: startCoordinate,
+          preferences,
+        },
+        cityId,
+      );
+      pushHistory(snapshot);
+      applyRouteResult(waypoints, response.roadIds, response.route);
+    } catch (cause) {
+      if (cause instanceof ApiClientError) {
+        setError(cause.message);
+      } else {
+        setError("Unable to return to start.");
+      }
+    } finally {
+      extendInFlightRef.current = false;
+      setLoading(false);
+    }
+  }, [
+    applyRouteResult,
+    canReturnToStart,
+    cityId,
+    currentSnapshot,
+    preferences,
+    pushHistory,
+    selectedRoadIds,
+    startCoordinate,
+    waypoints,
+  ]);
 
   const extendPlan = useCallback(
     async (input: {
@@ -204,7 +258,6 @@ export function usePlanner() {
             clickedRoadId: input.clickedRoadId,
             clicked: input.clickedRoadId ? undefined : input.clicked,
             start: waypoints[0]?.coordinate ?? start ?? input.clicked,
-            profile,
             preferences,
           },
           cityId,
@@ -234,7 +287,6 @@ export function usePlanner() {
       cityId,
       currentSnapshot,
       preferences,
-      profile,
       pushHistory,
       selectedRoadIds,
       start,
@@ -315,12 +367,10 @@ export function usePlanner() {
     setLoading(true);
     setError(null);
     try {
-      const targetDistanceM = targetDistanceMi * 1609.34;
       const response = await generateLoop(
         {
           start,
           targetDistanceM,
-          profile,
           preferences,
           constraints: {
             minDistanceM: targetDistanceM * 0.85,
@@ -341,12 +391,12 @@ export function usePlanner() {
     } finally {
       setLoading(false);
     }
-  }, [cityId, preferences, profile, start, targetDistanceMi]);
+  }, [cityId, preferences, start, targetDistanceM]);
 
   const inspectRoadAt = useCallback(
     async (roadId: string) => {
       try {
-        const inspection = await inspectRoad(roadId, cityId, profile);
+        const inspection = await inspectRoad(roadId, cityId);
         setRoadInspection(inspection);
         return inspection;
       } catch {
@@ -354,14 +404,24 @@ export function usePlanner() {
         return null;
       }
     },
-    [cityId, profile],
+    [cityId],
   );
 
   const handleRoadClick = useCallback(
     (roadIds: string[], coordinate: Coordinate) => {
       const inspectId = roadIds[0];
-      const inspectionPromise = inspectId ? inspectRoadAt(inspectId) : Promise.resolve(null);
+      if (inspectId) {
+        void inspectRoadAt(inspectId);
+      }
       if (mode !== "manual") {
+        return;
+      }
+      if (waypoints.length === 0) {
+        pushHistory();
+        const origin = createWaypoint(coordinate, "Start");
+        setWaypoints([origin]);
+        setStart(coordinate);
+        setSelectedWaypointId(origin.id);
         return;
       }
       const action = detectTraceClick(selectedRoadIds, roadIds);
@@ -377,15 +437,13 @@ export function usePlanner() {
         }
         return;
       }
-      void inspectionPromise.then((inspection) => {
-        void extendPlan({
-          clickedRoadId: inspectId,
-          clicked: coordinate,
-          label: inspection?.features.name,
-        });
+      setLoading(true);
+      void extendPlan({
+        clickedRoadId: inspectId,
+        clicked: coordinate,
       });
     },
-    [applySnapshot, extendPlan, inspectRoadAt, mode, selectedRoadIds],
+    [applySnapshot, extendPlan, inspectRoadAt, mode, pushHistory, selectedRoadIds, waypoints.length],
   );
 
   const undoPlan = useCallback(() => {
@@ -454,12 +512,10 @@ export function usePlanner() {
     cities,
     mode,
     setMode: changeMode,
-    profile,
-    setProfile,
     bikeabilityWeight,
     setBikeabilityWeight,
-    targetDistanceMi,
-    setTargetDistanceMi,
+    targetDistanceM,
+    setTargetDistanceM,
     waypoints,
     selectedRoadIds,
     selectedWaypointId,
@@ -486,6 +542,8 @@ export function usePlanner() {
     undoPlan,
     clearPlan,
     canUndo,
+    returnToStart,
+    canReturnToStart,
     useCurrentLocation,
     exportRoute,
     selectedCity: cities.find((city) => city.cityId === cityId) ?? null,

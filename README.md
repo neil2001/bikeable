@@ -78,9 +78,9 @@ Uses `data/raw/vancouver.osm` / `.osm.pbf` if present, otherwise a bbox extract 
 | --- | --- |
 | **Plan** | Click a road to follow it. Same street traces along it; a new street routes there. Empty-map clicks drop stops. Stops appear in the sidebar. |
 | **Generate** | Click a start, set a distance, generate a loop. |
-| **Settings** | Heatmap opacity and bikeability vs shortness weight. |
+| **Settings** | Units (mi/ft vs km/m), heatmap opacity, and bikeability vs shortness weight. |
 
-Profiles: Road, Commuter, Leisure — same graph, different v2 scoring weights ([`config/scoring/v2.yaml`](config/scoring/v2.yaml)).
+Bikeability scoring uses a single calibrated weight set in [`config/scoring/v2.yaml`](config/scoring/v2.yaml).
 
 ## Tests and lint
 

@@ -1,12 +1,14 @@
 import { X } from "lucide-react";
 import type { RoadInspectionResponse } from "../types/api";
+import { formatSpeed, type UnitSystem } from "../units";
 
 type Props = {
   inspection: RoadInspectionResponse | null;
   onClose: () => void;
+  unitSystem: UnitSystem;
 };
 
-export function RoadInspector({ inspection, onClose }: Props) {
+export function RoadInspector({ inspection, onClose, unitSystem }: Props) {
   if (!inspection) {
     return null;
   }
@@ -26,7 +28,7 @@ export function RoadInspector({ inspection, onClose }: Props) {
         <dt>Speed</dt>
         <dd>
           {inspection.features.speedKph
-            ? `${Math.round(inspection.features.speedKph * 0.621371)} mph`
+            ? formatSpeed(inspection.features.speedKph, unitSystem)
             : "unknown"}
         </dd>
         <dt>Surface</dt>

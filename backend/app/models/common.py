@@ -39,12 +39,6 @@ class Coordinate(ApiModel):
     lon: float = Field(ge=-180, le=180)
 
 
-class CyclingProfile(StrEnum):
-    ROAD = "road"
-    COMMUTER = "commuter"
-    LEISURE = "leisure"
-
-
 class RoutePreferences(ApiModel):
     distance_weight: float = Field(ge=0, le=1)
     bikeability_weight: float = Field(ge=0, le=1)

@@ -26,6 +26,7 @@ from app.routing.metrics import (
     compute_route_metrics,
     compute_route_metrics_from_edges,
     node_path_to_edges,
+    road_edges_to_node_path,
 )
 from app.routing.point_to_point import RoutingError, route_point_to_point
 from app.routing.resolve import resolve_road_edges
@@ -37,7 +38,7 @@ from app.services.route_store import save_route
 def route_segment(
     request: SegmentRouteRequest, city_id: str = "fixture"
 ) -> SegmentRouteResponse:
-    _graph, bike_graph = get_scored_graph(city_id, request.profile.value)
+    _graph, bike_graph = get_scored_graph(city_id)
     path, _metrics, geometry = route_point_to_point(
         bike_graph,
         request.start,
@@ -56,7 +57,7 @@ def route_segment(
 def route_manual(
     request: ManualRouteRequest, city_id: str = "fixture"
 ) -> RouteResponse:
-    _graph, bike_graph = get_scored_graph(city_id, request.profile.value)
+    _graph, bike_graph = get_scored_graph(city_id)
     full_path: list[int] = []
     for start, end in zip(request.waypoints, request.waypoints[1:], strict=False):
         segment_path, _, _ = route_point_to_point(
@@ -85,7 +86,7 @@ def route_manual(
 def route_from_roads(
     request: FromRoadsRequest, city_id: str = "fixture"
 ) -> RouteResponse:
-    _graph, bike_graph = get_scored_graph(city_id, request.profile.value)
+    _graph, bike_graph = get_scored_graph(city_id)
     edges = _edges_from_road_ids(bike_graph, request.road_ids)
     return _assemble_from_edges(bike_graph, edges)
 
@@ -93,7 +94,7 @@ def route_from_roads(
 def route_trace_extend(
     request: TraceExtendRequest, city_id: str = "fixture"
 ) -> TraceExtendResponse:
-    _graph, bike_graph = get_scored_graph(city_id, request.profile.value)
+    _graph, bike_graph = get_scored_graph(city_id)
     selected = (
         _edges_from_road_ids(bike_graph, request.selected_road_ids)
         if request.selected_road_ids
@@ -171,7 +172,7 @@ def _edges_from_road_ids(graph: nx.MultiDiGraph, road_ids: list[str]) -> list[Ro
 
 
 def route_loop(request: LoopRouteRequest, city_id: str = "fixture") -> RouteResponse:
-    _graph, bike_graph = get_scored_graph(city_id, request.profile.value)
+    _graph, bike_graph = get_scored_graph(city_id)
     result = generate_loop(
         bike_graph,
         request.start,
@@ -195,7 +196,7 @@ def route_loop(request: LoopRouteRequest, city_id: str = "fixture") -> RouteResp
 
 
 def _assemble_from_edges(graph, edges: list[RoadEdge]) -> RouteResponse:
-    metrics = compute_route_metrics_from_edges(graph, edges)
+    metrics = _metrics_from_edges_with_elevation(graph, edges)
     response = _metrics_to_route_response(
         route_id=f"rt_{uuid.uuid4().hex[:12]}",
         geometry=build_line_string_from_edges(graph, edges),
@@ -209,6 +210,15 @@ def _assemble_from_edges(graph, edges: list[RoadEdge]) -> RouteResponse:
 def _metrics_with_elevation(graph, path: list[int]) -> RouteMetrics:
     elevations = sample_path_elevations(graph, path)
     return compute_route_metrics(graph, path, elevations=elevations)
+
+
+def _metrics_from_edges_with_elevation(
+    graph: nx.MultiDiGraph,
+    edges: list[RoadEdge],
+) -> RouteMetrics:
+    path = road_edges_to_node_path(edges)
+    elevations = sample_path_elevations(graph, path)
+    return compute_route_metrics_from_edges(graph, edges, elevations=elevations)
 
 
 def _metrics_to_route_response(

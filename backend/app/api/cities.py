@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse
+from starlette.responses import Response
 
 from app.api.errors import ApiError
-from app.models.common import ApiErrorCode, CyclingProfile
+from app.models.common import ApiErrorCode
 from app.models.responses import (
     BikeabilityNetworkResponse,
     CityListResponse,
@@ -44,8 +45,7 @@ def get_city(cityId: str) -> CitySummary:
 def get_city_bikeability(
     request: Request,
     cityId: str,
-    profile: CyclingProfile = CyclingProfile.ROAD,
-) -> FileResponse | JSONResponse:
+) -> FileResponse | Response:
     try:
         get_city_summary(cityId)
     except KeyError:
@@ -57,18 +57,18 @@ def get_city_bikeability(
         ) from None
 
     try:
-        overlay_path = get_bikeability_overlay_path(cityId, profile.value)
+        overlay_path = get_bikeability_overlay_path(cityId)
     except CityGraphUnavailableError as exc:
         raise ApiError(
             code=ApiErrorCode.GRAPH_UNAVAILABLE,
             message=str(exc),
             status_code=503,
-            details={"cityId": cityId, "profile": profile.value},
+            details={"cityId": cityId},
         ) from exc
 
-    etag = bikeability_etag(cityId, profile.value)
+    etag = bikeability_etag(cityId)
     if request.headers.get("if-none-match") == etag:
-        return JSONResponse(
+        return Response(
             status_code=304,
             headers={
                 "Cache-Control": "public, max-age=0, must-revalidate",

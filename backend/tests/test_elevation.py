@@ -52,7 +52,7 @@ def test_lookup_elevations_returns_nones_when_request_fails(
 def test_sample_path_elevations_uses_open_meteo(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    graph = score_graph(apply_features_to_graph(build_tiny_graph()), "road")
+    graph = score_graph(apply_features_to_graph(build_tiny_graph()))
     monkeypatch.setattr(settings, "elevation_provider", "open_meteo")
     monkeypatch.setattr(
         "app.elevation.provider.lookup_elevations",
@@ -80,7 +80,6 @@ def test_manual_route_includes_elevation_profile(
                 {"lat": 49.2800, "lon": -123.1200},
                 {"lat": 49.2820, "lon": -123.1000},
             ],
-            "profile": "road",
             "preferences": {"distanceWeight": 0.2, "bikeabilityWeight": 0.8},
         },
     )
@@ -89,3 +88,27 @@ def test_manual_route_includes_elevation_profile(
     assert payload["profile"]
     assert all(sample["elevationM"] is not None for sample in payload["profile"])
     assert payload["elevationGainM"] > 0
+
+
+def test_trace_extend_includes_elevation_profile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "elevation_provider", "open_meteo")
+    monkeypatch.setattr(
+        "app.services.routing.sample_path_elevations",
+        lambda _graph, path: [20.0 + index * 3.0 for index, _node in enumerate(path)],
+    )
+    response = client.post(
+        "/api/v1/routes/trace-extend?cityId=fixture",
+        json={
+            "selectedRoadIds": [],
+            "clickedRoadId": "1:2:0",
+            "preferences": {"distanceWeight": 0.2, "bikeabilityWeight": 0.8},
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    route = payload["route"]
+    assert route["profile"]
+    assert all(sample["elevationM"] is not None for sample in route["profile"])
+    assert route["elevationGainM"] > 0

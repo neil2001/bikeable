@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { getBikeabilityNetwork } from "../api/client";
 import { ApiClientError } from "../api/errors";
 import type { Waypoint } from "../hooks/usePlanner";
-import type { Coordinate, CyclingProfile } from "../types/api";
+import type { Coordinate } from "../types/api";
 import { BIKEABILITY_STOPS, ROUTE_CASING, ROUTE_COLOR } from "./colors";
 import { OPENFREEMAP_POSITRON_STYLE } from "./styles";
 import { highlightRoadIds } from "./tracePath";
@@ -14,7 +14,6 @@ type Props = {
   center: Coordinate;
   cityBbox?: { minLon: number; minLat: number; maxLon: number; maxLat: number } | null;
   heatmapCityId: string;
-  heatmapProfile: CyclingProfile;
   routeCoordinates: [number, number][][];
   waypoints: Waypoint[];
   selectedRoadIds?: string[];
@@ -170,7 +169,6 @@ export function MapView({
   center,
   cityBbox,
   heatmapCityId,
-  heatmapProfile,
   routeCoordinates,
   waypoints,
   selectedRoadIds = [],
@@ -386,7 +384,7 @@ export function MapView({
     onHeatmapLoadingChangeRef.current?.(true);
     onHeatmapErrorRef.current?.(null);
 
-    void getBikeabilityNetwork(heatmapCityId, heatmapProfile)
+    void getBikeabilityNetwork(heatmapCityId)
       .then((network) => {
         if (cancelled) {
           return;
@@ -416,7 +414,7 @@ export function MapView({
     return () => {
       cancelled = true;
     };
-  }, [heatmapCityId, heatmapProfile, mapReady]);
+  }, [heatmapCityId, mapReady]);
 
   useEffect(() => {
     const map = mapRef.current;

@@ -154,9 +154,12 @@ def cached_scoring_config() -> ScoringConfig:
     return load_scoring_config()
 
 
-def get_profile(profile_id: str, config: ScoringConfig | None = None) -> ProfileConfig:
+def get_profile(config: ScoringConfig | None = None) -> ProfileConfig:
     scoring = config or cached_scoring_config()
-    if profile_id not in scoring.profiles:
-        msg = f"Unknown profile '{profile_id}'."
-        raise KeyError(msg)
-    return scoring.profiles[profile_id]
+    if not scoring.profiles:
+        msg = "Scoring config has no profiles."
+        raise ValueError(msg)
+    if len(scoring.profiles) > 1:
+        msg = "Scoring config must define exactly one profile."
+        raise ValueError(msg)
+    return next(iter(scoring.profiles.values()))

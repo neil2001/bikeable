@@ -200,12 +200,11 @@ def score_road(
 
 def score_graph(
     graph: nx.MultiDiGraph,
-    profile_id: str,
     *,
     config: ScoringConfig | None = None,
 ) -> nx.MultiDiGraph:
     scoring = config or load_scoring_config()
-    profile = get_profile(profile_id, scoring)
+    profile = get_profile(scoring)
 
     for _source, _target, _key, edge_data in graph.edges(keys=True, data=True):
         features = read_features_from_edge(edge_data)
@@ -214,5 +213,4 @@ def score_graph(
         edge_data["score_reasons"] = list(breakdown.reasons)
 
     graph.graph["score_version"] = str(scoring.version)
-    graph.graph["score_profile"] = profile_id
     return graph

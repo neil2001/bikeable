@@ -7,7 +7,6 @@ client = TestClient(app)
 LOOP_REQUEST = {
     "start": {"lat": 49.2800, "lon": -123.1200},
     "targetDistanceM": 4900,
-    "profile": "road",
     "preferences": {"distanceWeight": 0.2, "bikeabilityWeight": 0.8},
     "constraints": {"minDistanceM": 4000, "maxDistanceM": 6000},
 }

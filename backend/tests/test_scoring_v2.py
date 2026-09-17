@@ -1,5 +1,5 @@
 from app.features.builder import build_features
-from app.scoring.config import load_scoring_config
+from app.scoring.config import get_profile, load_scoring_config
 from app.scoring.score import score_road
 
 NAMED_ROADS: dict[str, dict[str, object]] = {
@@ -88,10 +88,10 @@ NAMED_ROADS: dict[str, dict[str, object]] = {
 }
 
 
-def _score(name: str, profile: str = "road") -> float:
+def _score(name: str) -> float:
     config = load_scoring_config()
     features = build_features(NAMED_ROADS[name])
-    return score_road(features, config.profiles[profile], config=config)
+    return score_road(features, get_profile(config), config=config)
 
 
 def test_named_vancouver_roads_land_in_qualitative_bands() -> None:
@@ -118,10 +118,8 @@ def test_named_vancouver_roads_land_in_qualitative_bands() -> None:
 
 
 def test_quiet_residential_without_infra_is_pleasant() -> None:
-    road = _score("residential_quiet", "road")
-    leisure = _score("residential_quiet", "leisure")
-    assert road >= 6.5, road
-    assert leisure >= 6.5, leisure
+    score = _score("residential_quiet")
+    assert score >= 6.5, score
 
 
 def test_missing_surface_does_not_sink_park_road() -> None:

@@ -10,7 +10,11 @@ def test_health_ok() -> None:
     assert response.json() == {"status": "ok"}
 
 
-def test_list_cities_includes_fixture_when_no_real_graph() -> None:
+def test_list_cities_includes_fixture_when_no_real_graph(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.services.city_registry.city_graph_is_available",
+        lambda _city_id: False,
+    )
     response = client.get("/api/v1/cities")
     assert response.status_code == 200
     payload = response.json()

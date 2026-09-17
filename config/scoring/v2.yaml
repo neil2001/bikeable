@@ -72,27 +72,3 @@ profiles:
       surface: 0.18
       calm_geometry: 0.12
       grade: 0.00
-
-  commuter:
-    infra_scale: 1.25
-    context_scale: 0.6
-    interaction_scale: 1.0
-    weights:
-      traffic: 0.34
-      speed: 0.18
-      road_environment: 0.14
-      surface: 0.10
-      calm_geometry: 0.24
-      grade: 0.00
-
-  leisure:
-    infra_scale: 1.0
-    context_scale: 1.35
-    interaction_scale: 1.0
-    weights:
-      traffic: 0.28
-      speed: 0.20
-      road_environment: 0.16
-      surface: 0.16
-      calm_geometry: 0.20
-      grade: 0.00

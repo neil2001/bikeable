@@ -28,7 +28,7 @@ def _time(label: str, fn) -> float:
 
 
 def bench_fixture() -> None:
-    graph = score_graph(apply_features_to_graph(build_tiny_graph()), "road")
+    graph = score_graph(apply_features_to_graph(build_tiny_graph()))
     attach_routing_index(graph)
     prefs = RoutePreferences(distance_weight=0.2, bikeability_weight=0.8)
     start = Coordinate(lat=49.2800, lon=-123.1200)
@@ -54,7 +54,7 @@ def bench_city(city_id: str) -> None:
         print(f"Skipping {city_id}: processed graph unavailable")
         return
 
-    _graph, bike_graph = get_scored_graph(city_id, "road")
+    _graph, bike_graph = get_scored_graph(city_id)
     prefs = RoutePreferences(distance_weight=0.2, bikeability_weight=0.8)
     start = Coordinate(lat=49.2827, lon=-123.1207)
     end = Coordinate(lat=49.2730, lon=-123.1000)

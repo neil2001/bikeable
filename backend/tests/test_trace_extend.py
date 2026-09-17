@@ -17,7 +17,7 @@ PREFERENCES_JSON = {"distanceWeight": 0.2, "bikeabilityWeight": 0.8}
 
 
 def _score(graph: nx.MultiDiGraph) -> nx.MultiDiGraph:
-    return score_graph(apply_features_to_graph(graph), "road")
+    return score_graph(apply_features_to_graph(graph))
 
 
 def _add_node(
@@ -201,7 +201,6 @@ def test_trace_extend_api_empty_path_selects_clicked() -> None:
         json={
             "selectedRoadIds": [],
             "clickedRoadId": "1:2:0",
-            "profile": "road",
             "preferences": PREFERENCES_JSON,
         },
     )
@@ -217,14 +216,13 @@ def test_trace_extend_api_skip_ahead_assembles_connected_path(monkeypatch) -> No
     graph = _score(_named_network())
     monkeypatch.setattr(
         "app.services.routing.get_scored_graph",
-        lambda _city_id, _profile: (graph, graph),
+        lambda _city_id: (graph, graph),
     )
     response = client.post(
         "/api/v1/routes/trace-extend?cityId=fixture",
         json={
             "selectedRoadIds": ["1:2:0"],
             "clickedRoadId": "3:4:0",
-            "profile": "road",
             "preferences": PREFERENCES_JSON,
         },
     )
@@ -235,7 +233,7 @@ def test_trace_extend_api_skip_ahead_assembles_connected_path(monkeypatch) -> No
 
     assembled = client.post(
         "/api/v1/routes/from-roads?cityId=fixture",
-        json={"roadIds": payload["roadIds"], "profile": "road"},
+        json={"roadIds": payload["roadIds"]},
     )
     assert assembled.status_code == 200
 
@@ -256,7 +254,7 @@ def test_trace_extend_api_expands_dropped_skip_click(monkeypatch) -> None:
     scored = _score(graph)
     monkeypatch.setattr(
         "app.services.routing.get_scored_graph",
-        lambda _city_id, _profile: (scored, scored),
+        lambda _city_id: (scored, scored),
     )
 
     response = client.post(
@@ -264,7 +262,6 @@ def test_trace_extend_api_expands_dropped_skip_click(monkeypatch) -> None:
         json={
             "selectedRoadIds": [],
             "clickedRoadId": "10:30:0",
-            "profile": "road",
             "preferences": PREFERENCES_JSON,
         },
     )
@@ -276,7 +273,7 @@ def test_trace_extend_api_expands_dropped_skip_click(monkeypatch) -> None:
 def test_from_roads_still_rejects_disconnected_skip() -> None:
     response = client.post(
         "/api/v1/routes/from-roads?cityId=fixture",
-        json={"roadIds": ["1:2:0", "3:4:0"], "profile": "road"},
+        json={"roadIds": ["1:2:0", "3:4:0"]},
     )
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "INVALID_REQUEST"
@@ -291,7 +288,6 @@ def test_trace_extend_api_start_snaps_to_fixture_network() -> None:
             "selectedRoadIds": [],
             "clickedRoadId": "2:3:0",
             "start": {"lat": start["lat"], "lon": start["lon"]},
-            "profile": "road",
             "preferences": PREFERENCES_JSON,
         },
     )
@@ -381,14 +377,13 @@ def test_trace_extend_api_accepts_clicked_coordinate(monkeypatch) -> None:
     graph = _score(_named_network())
     monkeypatch.setattr(
         "app.services.routing.get_scored_graph",
-        lambda _city_id, _profile: (graph, graph),
+        lambda _city_id: (graph, graph),
     )
     response = client.post(
         "/api/v1/routes/trace-extend?cityId=fixture",
         json={
             "selectedRoadIds": ["1:2:0"],
             "clicked": {"lat": 49.2640, "lon": -123.1000},
-            "profile": "road",
             "preferences": PREFERENCES_JSON,
         },
     )

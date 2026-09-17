@@ -1,5 +1,3 @@
-export type CyclingProfile = "road" | "commuter" | "leisure";
-
 export type Coordinate = {
   lat: number;
   lon: number;
@@ -71,27 +69,23 @@ export type SegmentRouteResponse = {
 export type SegmentRouteRequest = {
   start: Coordinate;
   end: Coordinate;
-  profile: CyclingProfile;
   preferences: RoutePreferences;
 };
 
 export type ManualRouteRequest = {
   waypoints: Coordinate[];
-  profile: CyclingProfile;
   preferences: RoutePreferences;
 };
 
 export type LoopRouteRequest = {
   start: Coordinate;
   targetDistanceM: number;
-  profile: CyclingProfile;
   preferences: RoutePreferences;
   constraints?: RouteConstraints;
 };
 
 export type FromRoadsRequest = {
   roadIds: string[];
-  profile: CyclingProfile;
 };
 
 export type TraceExtendRequest = {
@@ -99,7 +93,6 @@ export type TraceExtendRequest = {
   clickedRoadId?: string | null;
   clicked?: Coordinate | null;
   start?: Coordinate | null;
-  profile: CyclingProfile;
   preferences: RoutePreferences;
 };
 
@@ -181,7 +174,6 @@ export type RoadInspectionResponse = {
     };
     reasons: string[];
   };
-  profile: CyclingProfile;
 };
 
 export type ApiErrorCode =

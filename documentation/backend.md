@@ -84,15 +84,15 @@ Until you run `make build-graph`, Vancouver reports `graphVersion: "unbuilt"` an
 
 ## API
 
-JSON uses camelCase. Route/road query `cityId` defaults to `fixture` on the HTTP layer (distinct from settings `default_city_id=vancouver`). Profiles: `road` | `commuter` | `leisure`.
+JSON uses camelCase. Route/road query `cityId` defaults to `fixture` on the HTTP layer (distinct from settings `default_city_id=vancouver`).
 
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/api/v1/health` | Liveness `{ status: "ok" }` |
 | `GET` | `/api/v1/cities` | City list (no fixture) |
 | `GET` | `/api/v1/cities/{cityId}` | One city summary + bbox |
-| `GET` | `/api/v1/cities/{cityId}/bikeability?profile=` | Gzipped GeoJSON overlay + ETag |
-| `GET` | `/api/v1/roads/{roadId}?cityId&profile` | Inspect one edge |
+| `GET` | `/api/v1/cities/{cityId}/bikeability` | Gzipped GeoJSON overlay + ETag |
+| `GET` | `/api/v1/roads/{roadId}?cityId` | Inspect one edge |
 | `POST` | `/api/v1/routes/segment` | Shortest bikeable path between two points |
 | `POST` | `/api/v1/routes/manual` | Chain waypoint pairs; store route |
 | `POST` | `/api/v1/routes/from-roads` | Assemble a walk from ordered `roadIds` |
@@ -127,13 +127,13 @@ Active file: [`config/scoring/v2.yaml`](../config/scoring/v2.yaml). [`v1.yaml`](
 
 For each edge ([`scoring/score.py`](../backend/app/scoring/score.py)):
 
-1. Base score in `[0, 1]` — weighted mean of known components (`traffic`, `speed`, `road_environment`, `surface`, `calm_geometry`, `grade`). Missing optional dimensions are dropped and weights renormalized. Grade weight is **0** in all three profiles.
-2. Infrastructure bonus (cycleway / track / lane / …), scaled per profile, capped.
+1. Base score in `[0, 1]` — weighted mean of known components (`traffic`, `speed`, `road_environment`, `surface`, `calm_geometry`, `grade`). Missing optional dimensions are dropped and weights renormalized. Grade weight is **0**.
+2. Infrastructure bonus (cycleway / track / lane / …), capped.
 3. Context bonus (park / greenway / LCN), scaled, capped.
 4. Interaction terms (calm combo, park+calm, exposed fast/wide, protection on busy roads).
 5. Final score clamped to **0–10**, stored on the edge as `bikeability`.
 
-[`create_bike_graph`](../backend/app/scoring/bike_graph.py) copies the scored graph, drops non-traversable edges, and can keep walk links (`path` / `footway` / …) marked `walk_link=True` (used for routing).
+[`create_bike_graph`](../backend/app/scoring/bike_graph.py) copies the scored graph, drops non-traversable edges (including unmarked sidewalks and private driveways on the overlay), and can keep walk links marked `walk_link=True`. Unmarked pedestrian ways are kept for routing only when they are high-detour necessary connectors; other walk highways with `bicycle=no` may still be walk links.
 
 Routing cost ([`routing/cost.py`](../backend/app/routing/cost.py)):
 

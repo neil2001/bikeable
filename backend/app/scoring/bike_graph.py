@@ -1,7 +1,12 @@
 import networkx as nx
 
 from app.features.apply import read_features_from_edge
-from app.features.normalize import coerce_tag, normalize_highway_class
+from app.features.normalize import (
+    coerce_tag,
+    is_unmarked_pedestrian_way,
+    normalize_highway_class,
+)
+from app.scoring.connectors import mark_necessary_connectors
 
 WALK_LINK_HIGHWAYS = {"path", "footway", "pedestrian", "steps"}
 
@@ -13,6 +18,8 @@ def create_bike_graph(
 ) -> nx.MultiDiGraph:
     """Return a copy containing cyclable edges, optionally walkable connectors."""
     bike_graph = graph.copy()
+    if allow_walk_links:
+        mark_necessary_connectors(bike_graph)
     removable: list[tuple[int, int, int]] = []
     for source, target, key, edge_data in bike_graph.edges(keys=True, data=True):
         if read_features_from_edge(edge_data).traversable:
@@ -31,4 +38,6 @@ def _is_walk_link(edge_data: dict) -> bool:
         return False
     if coerce_tag(edge_data.get("access")) == "private":
         return False
+    if is_unmarked_pedestrian_way(edge_data):
+        return bool(edge_data.get("necessary_connector"))
     return True

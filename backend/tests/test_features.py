@@ -9,6 +9,7 @@ from app.features.builder import build_features
 from app.features.normalize import (
     classify_infra,
     collect_cycleway_tags,
+    format_tag,
     is_traversable,
     normalize_lane_count,
     normalize_speed_kph,
@@ -35,6 +36,12 @@ def test_normalize_lanes_handles_multi_values() -> None:
     assert normalize_lane_count("2") == 2
     assert normalize_lane_count("2;3") == 3
     assert normalize_lane_count(None) is None
+
+
+def test_format_tag_joins_lists() -> None:
+    assert format_tag(["concrete", "paved"]) == "concrete; paved"
+    assert format_tag("asphalt") == "asphalt"
+    assert format_tag(None) is None
 
 
 def test_cycleway_both_is_detected() -> None:
@@ -79,6 +86,18 @@ def test_motorway_and_bicycle_no_are_not_traversable() -> None:
     assert is_traversable(_edge(highway="trunk")) is True
     assert is_traversable(_edge(highway="busway")) is False
     assert is_traversable(_edge(highway="busway", bicycle="yes")) is True
+
+
+def test_unmarked_pedestrian_ways_and_driveways_are_not_traversable() -> None:
+    assert is_traversable(_edge(highway="footway")) is False
+    assert is_traversable(_edge(highway="pedestrian")) is False
+    assert is_traversable(_edge(highway="steps")) is False
+    assert is_traversable(_edge(highway="footway", bicycle="yes")) is True
+    assert is_traversable(_edge(highway="service", service="driveway")) is False
+    assert is_traversable(_edge(highway="service", service="alley")) is True
+    assert is_traversable(_edge(highway="service")) is True
+    assert is_traversable(_edge(highway="path")) is True
+    assert is_traversable(_edge(highway="cycleway")) is True
 
 
 def test_missing_traffic_uses_class_proxy() -> None:

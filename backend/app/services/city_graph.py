@@ -19,7 +19,7 @@ from app.scoring.score import score_graph
 from app.services.bikeability_map import graph_to_bikeability_geojson
 
 _CACHE_LIMIT = 2
-OVERLAY_FORMAT_VERSION = "4"
+OVERLAY_FORMAT_VERSION = "10"
 
 
 class CityGraphUnavailableError(Exception):
@@ -29,7 +29,7 @@ class CityGraphUnavailableError(Exception):
         self.reason = reason
 
 
-CacheKey = tuple[str, str, str, str]
+CacheKey = tuple[str, str, str]
 
 _scored_graph_cache: OrderedDict[CacheKey, nx.MultiDiGraph] = OrderedDict()
 _bike_graph_cache: OrderedDict[CacheKey, nx.MultiDiGraph] = OrderedDict()
@@ -56,10 +56,9 @@ def _graph_version(city_id: str) -> str:
     return GRAPH_VERSION
 
 
-def _cache_key(city_id: str, profile_id: str) -> tuple[str, str, str, str]:
+def _cache_key(city_id: str) -> CacheKey:
     return (
         city_id,
-        profile_id,
         _graph_version(city_id),
         str(cached_scoring_config().version),
     )
@@ -103,11 +102,8 @@ def _load_base_graph(city_id: str) -> nx.MultiDiGraph:
         raise CityGraphUnavailableError(city_id, str(exc)) from exc
 
 
-def get_scored_graph(
-    city_id: str,
-    profile_id: str,
-) -> tuple[nx.MultiDiGraph, nx.MultiDiGraph]:
-    cache_key = _cache_key(city_id, profile_id)
+def get_scored_graph(city_id: str) -> tuple[nx.MultiDiGraph, nx.MultiDiGraph]:
+    cache_key = _cache_key(city_id)
     cached_scored = _scored_graph_cache.get(cache_key)
     cached_bike = _bike_graph_cache.get(cache_key)
     if cached_scored is not None and cached_bike is not None:
@@ -117,7 +113,7 @@ def get_scored_graph(
     scored = cached_scored
     if scored is None:
         graph = _load_base_graph(city_id)
-        scored = score_graph(graph, profile_id)
+        scored = score_graph(graph)
         _store_scored_graph(cache_key, scored)
 
     bike_graph = create_bike_graph(scored, allow_walk_links=True)
@@ -126,40 +122,34 @@ def get_scored_graph(
     return scored, bike_graph
 
 
-def get_scored_graph_for_bikeability(
-    city_id: str,
-    profile_id: str,
-) -> nx.MultiDiGraph:
-    cache_key = _cache_key(city_id, profile_id)
+def get_scored_graph_for_bikeability(city_id: str) -> nx.MultiDiGraph:
+    cache_key = _cache_key(city_id)
     cached_scored = _scored_graph_cache.get(cache_key)
     if cached_scored is not None:
         _touch_cache_key(cache_key)
         return cached_scored
 
     graph = _load_base_graph(city_id)
-    scored = score_graph(graph, profile_id)
+    scored = score_graph(graph)
     _store_scored_graph(cache_key, scored)
     return scored
 
 
-def overlay_cache_path(city_id: str, profile_id: str) -> Path:
-    city_id_key, profile_key, graph_version, score_version = _cache_key(
-        city_id,
-        profile_id,
-    )
+def overlay_cache_path(city_id: str) -> Path:
+    city_id_key, graph_version, score_version = _cache_key(city_id)
     filename = (
-        f"bikeability-{profile_key}-g{graph_version}"
+        f"bikeability-g{graph_version}"
         f"-s{score_version}-o{OVERLAY_FORMAT_VERSION}.geojson.gz"
     )
     return settings.processed_data_dir / city_id_key / filename
 
 
-def get_bikeability_overlay_path(city_id: str, profile_id: str) -> Path:
-    path = overlay_cache_path(city_id, profile_id)
+def get_bikeability_overlay_path(city_id: str) -> Path:
+    path = overlay_cache_path(city_id)
     if path.exists():
         return path
 
-    scored = get_scored_graph_for_bikeability(city_id, profile_id)
+    scored = get_scored_graph_for_bikeability(city_id)
     payload = graph_to_bikeability_geojson(
         scored,
         city_id=city_id,
@@ -182,12 +172,9 @@ def _overlay_bust_token(city_id: str) -> str:
     return f"{metadata.get('nodeCount', 0)}-{metadata.get('edgeCount', 0)}"
 
 
-def bikeability_etag(city_id: str, profile_id: str) -> str:
-    city_id_key, profile_key, graph_version, score_version = _cache_key(
-        city_id,
-        profile_id,
-    )
+def bikeability_etag(city_id: str) -> str:
+    city_id_key, graph_version, score_version = _cache_key(city_id)
     return (
         f'"{city_id_key}-{graph_version}-{score_version}-'
-        f"{OVERLAY_FORMAT_VERSION}-{profile_key}-{_overlay_bust_token(city_id)}\""
+        f"{OVERLAY_FORMAT_VERSION}-{_overlay_bust_token(city_id)}\""
     )

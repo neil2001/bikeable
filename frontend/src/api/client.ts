@@ -1,7 +1,6 @@
 import type {
   BikeabilityNetworkResponse,
   CityListResponse,
-  CyclingProfile,
   HealthResponse,
   LoopRouteRequest,
   ManualRouteRequest,
@@ -23,6 +22,17 @@ import {
 
 const apiMode = import.meta.env.VITE_API_MODE ?? "live";
 const defaultCityId = import.meta.env.VITE_DEFAULT_CITY_ID ?? "vancouver";
+
+type BikeabilityNetworkCacheEntry = {
+  etag: string;
+  payload: BikeabilityNetworkResponse;
+};
+
+const bikeabilityNetworkCache = new Map<string, BikeabilityNetworkCacheEntry>();
+
+function bikeabilityNetworkCacheKey(cityId: string): string {
+  return cityId;
+}
 
 export function isMockApi(): boolean {
   return apiMode === "mock";
@@ -50,22 +60,40 @@ export async function getCities(): Promise<CityListResponse> {
 
 export async function getBikeabilityNetwork(
   cityId: string,
-  profile: CyclingProfile = "road",
 ): Promise<BikeabilityNetworkResponse> {
   if (isMockApi()) {
     return mockBikeabilityNetwork;
   }
-  const params = new URLSearchParams({ profile });
-  const response = await fetch(`/api/v1/cities/${cityId}/bikeability?${params}`);
-  return parseApiResponse<BikeabilityNetworkResponse>(response);
+  const cacheKey = bikeabilityNetworkCacheKey(cityId);
+  const cached = bikeabilityNetworkCache.get(cacheKey);
+  const headers: HeadersInit = {};
+  if (cached?.etag) {
+    headers["If-None-Match"] = cached.etag;
+  }
+  const response = await fetch(`/api/v1/cities/${cityId}/bikeability`, {
+    headers,
+  });
+  if (response.status === 304) {
+    if (!cached) {
+      throw new Error(
+        `Bikeability network cache miss for ${cacheKey} on 304 response`,
+      );
+    }
+    return cached.payload;
+  }
+  const payload = await parseApiResponse<BikeabilityNetworkResponse>(response);
+  const etag = response.headers.get("etag");
+  if (etag) {
+    bikeabilityNetworkCache.set(cacheKey, { etag, payload });
+  }
+  return payload;
 }
 
 export async function inspectRoad(
   roadId: string,
   cityId: string,
-  profile: CyclingProfile = "road",
 ): Promise<RoadInspectionResponse> {
-  const params = new URLSearchParams({ cityId, profile });
+  const params = new URLSearchParams({ cityId });
   const response = await fetch(`/api/v1/roads/${roadId}?${params}`);
   return parseApiResponse<RoadInspectionResponse>(response);
 }
